@@ -1,0 +1,1483 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>SeatSwap</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500..800&family=JetBrains+Mono:wght@500;600&display=swap">
+<style>
+/* Layout: one iPhone on a dotted tablecloth, prototype controls in a side rail (a sheet on real phones) */
+:root{
+  --bg:#E6E9F2; --bg-dot:#CDD3E4; --frame:#11131D;
+  --surface:#FFFFFF; --surface-2:#F4F5F9; --surface-3:#E9ECF3;
+  --ink:#141726; --muted:#5B6179; --faint:#8C92A8; --line:#E0E3ED;
+  --accent:#3043CF; --accent-ink:#FFFFFF; --accent-soft:#E7EAFF;
+  --seat:#E0960B; --seat-ink:#4A3000; --seat-soft:#FFF1D2;
+  --good:#16804F; --good-soft:#DCF3E7; --bad:#C3343A; --bad-soft:#FBE4E4;
+  --imsg:#0A84FF; --imsg-gray:#E9E9EB; --scrim:rgba(12,14,28,.42);
+  --shadow:0 1px 2px rgba(20,23,38,.05), 0 6px 20px rgba(20,23,38,.06);
+  --f-display:'Bricolage Grotesque', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --f-body:-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --f-mono:'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0C0E19; --bg-dot:#1C2033; --frame:#05060B;
+    --surface:#171A2A; --surface-2:#0F1120; --surface-3:#23273B;
+    --ink:#ECEEF8; --muted:#9CA2BC; --faint:#6D738D; --line:#262B41;
+    --accent:#8391FF; --accent-ink:#0B0D1A; --accent-soft:#232A5C;
+    --seat:#F2B33D; --seat-ink:#FFD995; --seat-soft:#35290F;
+    --good:#4CC48A; --good-soft:#12301F; --bad:#FF6F72; --bad-soft:#3A1719;
+    --imsg:#0A84FF; --imsg-gray:#26283A; --scrim:rgba(0,0,0,.6);
+    --shadow:0 1px 2px rgba(0,0,0,.3), 0 6px 20px rgba(0,0,0,.25);
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0C0E19; --bg-dot:#1C2033; --frame:#05060B;
+  --surface:#171A2A; --surface-2:#0F1120; --surface-3:#23273B;
+  --ink:#ECEEF8; --muted:#9CA2BC; --faint:#6D738D; --line:#262B41;
+  --accent:#8391FF; --accent-ink:#0B0D1A; --accent-soft:#232A5C;
+  --seat:#F2B33D; --seat-ink:#FFD995; --seat-soft:#35290F;
+  --good:#4CC48A; --good-soft:#12301F; --bad:#FF6F72; --bad-soft:#3A1719;
+  --imsg:#0A84FF; --imsg-gray:#26283A; --scrim:rgba(0,0,0,.6);
+  --shadow:0 1px 2px rgba(0,0,0,.3), 0 6px 20px rgba(0,0,0,.25);
+  color-scheme:dark;
+}
+
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.4 var(--f-body);-webkit-font-smoothing:antialiased;
+  background-image:radial-gradient(var(--bg-dot) 1px, transparent 1.3px);background-size:18px 18px}
+button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer;-webkit-tap-highlight-color:transparent}
+button:disabled{cursor:default}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+h1,h2,h3,p{margin:0}
+.ic{flex:none;display:block}
+
+/* ---------- Stage + device ---------- */
+.stage{min-height:100%;display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:36px;padding:24px 16px}
+.phone{flex:none;width:393px;height:min(852px, calc(100vh - 48px));min-height:640px;border-radius:60px;padding:11px;background:var(--frame);
+  box-shadow:0 0 0 1.5px #3a3d4a inset, 0 40px 80px -20px rgba(10,12,30,.45), 0 10px 30px rgba(10,12,30,.2);position:relative}
+.screen{position:relative;height:100%;border-radius:49px;overflow:hidden;background:var(--surface-2);display:flex;flex-direction:column;isolation:isolate}
+.island{position:absolute;top:11px;left:50%;transform:translateX(-50%);width:122px;height:35px;border-radius:20px;background:#000;z-index:80}
+.sbar{height:54px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:4px 32px 0 40px;font-weight:650;font-size:16px;font-variant-numeric:tabular-nums}
+.sbar-r{display:flex;gap:6px;align-items:center}
+.main{flex:1;min-height:0;display:flex;flex-direction:column}
+.view{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;display:flex;flex-direction:column;scrollbar-width:none}
+.view::-webkit-scrollbar{display:none}
+.view > *{flex-shrink:0}
+
+/* ---------- Tab bar ---------- */
+.tabbar{flex:none;display:grid;grid-template-columns:repeat(3,1fr);padding:6px 8px 28px;border-top:1px solid var(--line);background:var(--surface)}
+.tab{display:flex;flex-direction:column;align-items:center;gap:3px;font-size:11px;font-weight:600;color:var(--faint);padding:4px 0}
+.tab.on{color:var(--accent)}
+
+/* ---------- Headers ---------- */
+.lg{padding:6px 16px 10px}
+.lg-top{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.brand{display:flex;gap:8px;align-items:center;font-family:var(--f-display);font-weight:720;font-size:16px;letter-spacing:-.01em}
+.logo{width:26px;height:26px;border-radius:8px;background:var(--accent);color:var(--accent-ink);display:grid;place-items:center}
+.lg-actions{display:flex;gap:8px;align-items:center}
+.lg h1{font-family:var(--f-display);font-size:34px;line-height:1.02;font-weight:760;letter-spacing:-.025em;margin:16px 0 6px;text-wrap:balance}
+.lg-sub{color:var(--muted);font-size:14px;max-width:34ch}
+.icon-btn{height:34px;min-width:34px;border-radius:17px;display:inline-flex;align-items:center;justify-content:center;gap:6px;background:var(--surface);border:1px solid var(--line);position:relative;padding:0 9px;font-size:13px;font-weight:650}
+.me-btn{border-radius:50%;padding:2px;border:2px solid var(--accent)}
+.badge{position:absolute;top:-5px;right:-5px;min-width:18px;height:18px;border-radius:9px;background:var(--bad);color:#fff;font-size:11px;font-weight:700;display:grid;place-items:center;padding:0 5px}
+.demo-only{display:none}
+.nb{position:sticky;top:0;z-index:6;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;min-height:46px;padding:0 6px;background:var(--surface-2);border-bottom:1px solid var(--line)}
+.nb-t{font-weight:650;font-size:16px;max-width:190px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:center}
+.nb-r{justify-self:end}
+.nb-btn{display:inline-flex;align-items:center;gap:0;color:var(--accent);font-size:16px;padding:6px 8px;border-radius:10px}
+.step-count{font-family:var(--f-mono);font-size:12.5px;font-weight:600;color:var(--muted)}
+
+/* ---------- Primitives ---------- */
+.pad{padding:8px 16px 24px}
+.stack{display:flex;flex-direction:column;gap:12px}
+.card{background:var(--surface);border-radius:22px;border:1px solid var(--line);box-shadow:var(--shadow)}
+.row{display:flex;align-items:center;gap:12px}
+.grow{flex:1;min-width:0}
+.meta{color:var(--muted);font-size:13px}
+.av{width:var(--s);height:var(--s);border-radius:50%;display:inline-grid;place-items:center;background:hsl(var(--h) 50% 45%);color:#fff;font-weight:680;font-size:calc(var(--s) * .37);flex:none;letter-spacing:.02em;line-height:1}
+.avs{display:inline-flex}
+.avs .av{box-shadow:0 0 0 2px var(--surface)}
+.avs .av + .av{margin-left:-8px}
+.tile{width:var(--s);height:var(--s);border-radius:calc(var(--s) * .28);flex:none;display:grid;place-items:center;color:#fff;font-family:var(--f-display);font-weight:760;font-size:calc(var(--s) * .38);letter-spacing:-.02em;
+  background:linear-gradient(150deg, hsl(var(--h) 62% 54%), hsl(calc(var(--h) + 28) 58% 34%))}
+.pill{display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:650;padding:3px 9px;border-radius:999px;white-space:nowrap}
+.pill.seat{background:var(--seat-soft);color:var(--seat-ink)}
+.pill.good{background:var(--good-soft);color:var(--good)}
+.pill.bad{background:var(--bad-soft);color:var(--bad)}
+.pill.accent{background:var(--accent-soft);color:var(--accent)}
+.pill.muted{background:var(--surface-3);color:var(--muted)}
+.cd-chip{font-family:var(--f-mono);font-size:12px;font-weight:600;padding:5px 8px;border-radius:8px;background:var(--seat-soft);color:var(--seat-ink);white-space:nowrap;font-variant-numeric:tabular-nums}
+.why{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:620;color:var(--accent);background:var(--accent-soft);padding:5px 10px 5px 8px;border-radius:999px;align-self:flex-start;max-width:100%}
+.why span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.btn{min-height:48px;border-radius:15px;padding:0 18px;font-weight:660;display:inline-flex;align-items:center;justify-content:center;gap:8px;font-size:15.5px;text-align:center}
+.btn.primary{background:var(--accent);color:var(--accent-ink)}
+.btn.primary:disabled{opacity:.38}
+.btn.secondary{background:var(--surface-3);color:var(--ink)}
+.btn.good{background:var(--good);color:#fff}
+.btn.danger{background:var(--bad);color:#fff}
+.btn.danger-ghost{color:var(--bad);background:var(--bad-soft)}
+.btn.block{width:100%}
+.btn.sm{min-height:38px;font-size:14px;border-radius:12px;padding:0 14px}
+.link-btn{color:var(--accent);font-weight:620;font-size:14px;white-space:nowrap}
+.eyebrow{font-size:11.5px;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);font-weight:680}
+.label{font-size:12px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);font-weight:680;margin:20px 0 8px}
+.empty{margin:24px 16px;padding:28px 20px;text-align:center;border:1.5px dashed var(--line);border-radius:22px;color:var(--muted)}
+.empty h3{font-family:var(--f-display);font-size:20px;color:var(--ink);margin-bottom:6px}
+.dots{display:inline-flex;gap:4px;align-items:center}
+.dot{width:11px;height:11px;border-radius:4px;background:var(--ink);opacity:.75}
+.dot.open{background:var(--seat-soft);border:2px solid var(--seat);opacity:1}
+
+/* ---------- Feed ---------- */
+.fcard{padding:14px;display:flex;flex-direction:column;gap:12px}
+.fcard-link{display:flex;flex-direction:column;gap:11px;text-align:left;width:100%;border-radius:14px}
+.fcard h3,.rcard h3{font-family:var(--f-display);font-size:19px;font-weight:720;letter-spacing:-.015em;line-height:1.15}
+.seats-line{display:flex;align-items:center;gap:10px;font-weight:650;font-size:14.5px}
+.fcard-foot{display:flex;gap:10px;align-items:center}
+.fcard-foot .btn{flex:1}
+
+/* ---------- Reservations ---------- */
+.post-cta{margin:4px 16px 4px;display:flex;align-items:center;justify-content:center;gap:8px;min-height:52px;border-radius:16px;background:var(--accent);color:var(--accent-ink);font-weight:700;font-size:16px}
+.rcard{padding:14px;display:flex;flex-direction:column;gap:10px;text-align:left;width:100%}
+.rstatus{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted);min-width:0}
+.rstatus span:last-child{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sec-title{font-size:12px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);font-weight:680;margin:18px 16px 8px}
+
+/* ---------- Post flow ---------- */
+.prog{height:3px;background:var(--line)}
+.prog span{display:block;height:100%;background:var(--accent);transition:width .3s ease}
+.q{font-family:var(--f-display);font-size:27px;font-weight:740;letter-spacing:-.022em;margin:6px 0 14px;text-wrap:balance;line-height:1.08}
+.opts{display:flex;flex-direction:column;gap:8px}
+.opt{display:flex;align-items:center;gap:12px;width:100%;padding:11px 12px;border-radius:17px;background:var(--surface);border:1.5px solid var(--line);text-align:left}
+.opt.on{border-color:var(--accent);background:var(--accent-soft)}
+.opt strong{display:block;font-size:15.5px}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{padding:9px 13px;border-radius:12px;background:var(--surface);border:1.5px solid var(--line);font-weight:620;font-size:14px;font-variant-numeric:tabular-nums}
+.chip.on{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.chip:disabled{opacity:.35}
+.chip small{opacity:.7;font-weight:600;margin-left:3px}
+.hscroll{display:flex;gap:8px;overflow-x:auto;padding-bottom:2px;scrollbar-width:none;margin:0 -16px;padding-inline:16px}
+.hscroll::-webkit-scrollbar{display:none}
+.day{flex:none;width:62px;padding:9px 0;border-radius:15px;background:var(--surface);border:1.5px solid var(--line);display:flex;flex-direction:column;align-items:center;gap:1px;font-size:12px;font-weight:620;color:var(--muted)}
+.day b{font-family:var(--f-display);font-size:21px;color:var(--ink);font-weight:720}
+.day.on{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.day.on b{color:var(--accent-ink)}
+.times{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.times .chip{padding:9px 0}
+.stepper{display:flex;align-items:center;justify-content:center;gap:22px;margin:8px 0 18px}
+.step-btn{width:58px;height:58px;border-radius:50%;background:var(--surface);border:1.5px solid var(--line);font-size:28px;font-weight:500;display:grid;place-items:center}
+.step-btn:disabled{opacity:.35}
+.step-n{font-family:var(--f-display);font-size:72px;line-height:1;font-weight:780;width:80px;text-align:center;font-variant-numeric:tabular-nums}
+.ta{width:100%;min-height:120px;border-radius:17px;border:1.5px solid var(--line);background:var(--surface);color:var(--ink);padding:14px;font:inherit;font-size:16px;resize:none}
+.ta:focus{border-color:var(--accent);outline:none}
+.hint{font-size:13px;color:var(--muted);margin-top:12px;display:flex;gap:8px;align-items:flex-start;line-height:1.4}
+.fee-big{font-family:var(--f-display);font-size:52px;font-weight:780;letter-spacing:-.03em;text-align:center;margin:4px 0 12px;font-variant-numeric:tabular-nums}
+.locked{display:flex;gap:12px;align-items:center;padding:14px;border-radius:17px;background:var(--surface);border:1.5px solid var(--line)}
+.foot{position:sticky;bottom:0;margin-top:auto;padding:14px 16px 30px;background:linear-gradient(to bottom, transparent, var(--surface-2) 24%);display:flex;flex-direction:column;gap:6px;z-index:4}
+.foot-note{font-size:12px;color:var(--muted);text-align:center}
+.foot-2{display:grid;grid-template-columns:1fr 1.5fr;gap:10px}
+
+/* ---------- Audience ---------- */
+.urgent{display:flex;gap:10px;padding:12px 14px;border-radius:17px;font-size:13.5px;line-height:1.42}
+.urgent.hot{background:var(--seat-soft);color:var(--seat-ink)}
+.urgent.calm{background:var(--accent-soft);color:var(--ink)}
+.urgent .ic{margin-top:1px}
+.sec{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin:22px 2px 8px}
+.sec h3{font-size:12px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);font-weight:680}
+.sec h3 em{font-style:normal;color:var(--seat-ink);background:var(--seat-soft);padding:1px 6px;border-radius:6px;margin-left:4px;letter-spacing:.03em}
+.group{background:var(--surface);border-radius:18px;border:1px solid var(--line);overflow:hidden}
+.group > * + *{border-top:1px solid var(--line)}
+.prow{display:flex;align-items:center;gap:12px;width:100%;padding:10px 14px;text-align:left;min-height:60px}
+.prow-t{flex:1;min-width:0;display:flex;flex-direction:column}
+.prow-t strong{font-size:15px;font-weight:620}
+.prow-t small{color:var(--muted);font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.check{width:24px;height:24px;border-radius:50%;border:2px solid var(--line);display:grid;place-items:center;color:transparent;flex:none}
+.prow.on .check{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.x-btn{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;color:var(--muted);background:var(--surface-3);flex:none}
+.star-btn{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;color:var(--faint);flex:none}
+.star-btn.on{color:var(--seat)}
+.star-btn.on svg{fill:currentColor}
+
+/* ---------- Table diagram ---------- */
+.rtable{position:relative;flex:none}
+.rtable-top{position:absolute;border-radius:50%;background:var(--surface-3);border:1px solid var(--line);display:grid;place-items:center;text-align:center;color:var(--muted);font-size:10.5px;line-height:1.1;font-weight:600}
+.rtable-top b{display:block;font-family:var(--f-display);font-size:18px;color:var(--ink)}
+.rt-seat{position:absolute;border-radius:50%}
+.rt-seat .av{box-shadow:0 0 0 3px var(--surface)}
+.rt-open{border-radius:50%;border:2px dashed var(--seat);background:var(--seat-soft);color:var(--seat-ink);display:grid;place-items:center;font-weight:700;box-shadow:0 0 0 3px var(--surface)}
+
+/* ---------- Live status ---------- */
+.hero{padding:16px;display:flex;flex-direction:column;gap:14px}
+.hero h2{font-family:var(--f-display);font-size:24px;font-weight:750;letter-spacing:-.02em;line-height:1.1}
+.meter{display:flex;align-items:center;gap:18px}
+.big{font-family:var(--f-display);font-size:56px;line-height:.9;font-weight:790;font-variant-numeric:tabular-nums;letter-spacing:-.03em}
+.funnel{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.fstat{background:var(--surface);border:1px solid var(--line);border-radius:15px;padding:10px 4px;text-align:center}
+.fstat b{display:block;font-family:var(--f-display);font-size:22px;font-weight:740;font-variant-numeric:tabular-nums}
+.fstat span{font-size:11.5px;color:var(--muted);font-weight:600}
+.tl{list-style:none;margin:0;padding:14px 14px 2px}
+.tl li{position:relative;padding:0 0 16px 28px}
+.tl li::before{content:'';position:absolute;left:7px;top:16px;bottom:-1px;width:2px;background:var(--line)}
+.tl li:last-child::before{display:none}
+.tl .tdot{position:absolute;left:0;top:2px;width:16px;height:16px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 3px var(--surface)}
+.tl li.pending .tdot{background:var(--surface);border:2px dashed var(--faint)}
+.tl li.good .tdot{background:var(--good)}
+.tl li.warn .tdot{background:var(--seat)}
+.tl li.bad .tdot{background:var(--bad)}
+.tl li.muted .tdot{background:var(--faint)}
+.tl-t{font-weight:650;font-size:14.5px;display:flex;justify-content:space-between;gap:8px}
+.tl-d{font-size:13px;color:var(--muted)}
+.tl-time{font-family:var(--f-mono);font-size:11px;color:var(--faint);white-space:nowrap;font-weight:500;padding-top:2px}
+.tl li.pending .tl-t{color:var(--muted)}
+.prompt{background:var(--seat-soft);border:1.5px solid var(--seat);border-radius:20px;padding:14px;display:flex;flex-direction:column;gap:10px;color:var(--seat-ink)}
+.prompt h3{font-family:var(--f-display);font-size:19px;font-weight:740;color:var(--ink)}
+.prompt p{font-size:13.5px}
+.prompt .avs .av{box-shadow:0 0 0 2px var(--seat-soft)}
+
+/* ---------- Spot detail ---------- */
+.placecard{position:relative;border-radius:24px;overflow:hidden;color:#fff;padding:18px;min-height:150px;display:flex;flex-direction:column;justify-content:flex-end;gap:4px;
+  background:linear-gradient(155deg, hsl(var(--h) 62% 52%), hsl(calc(var(--h) + 30) 60% 28%))}
+.placecard::before{content:'';position:absolute;inset:0;background:repeating-linear-gradient(90deg, rgba(255,255,255,.07) 0 1px, transparent 1px 22px);pointer-events:none}
+.placecard .pc-code{position:absolute;top:14px;left:18px;font-family:var(--f-mono);font-size:11px;letter-spacing:.08em;opacity:.85}
+.placecard .pc-cd{position:absolute;top:12px;right:12px;font-family:var(--f-mono);font-size:12px;font-weight:600;background:rgba(0,0,0,.28);padding:5px 9px;border-radius:9px;font-variant-numeric:tabular-nums}
+.placecard h2{font-family:var(--f-display);font-size:30px;font-weight:780;letter-spacing:-.025em;line-height:1.02;position:relative}
+.placecard p{opacity:.9;font-size:14px;position:relative}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:10px 14px;padding:14px 16px;font-size:14.5px}
+.kv dt{color:var(--muted)}
+.kv dd{margin:0;font-weight:600;text-align:right;font-variant-numeric:tabular-nums}
+.note{display:flex;gap:10px;align-items:flex-start;padding:14px}
+.note-b{background:var(--surface-3);padding:10px 13px;border-radius:4px 16px 16px 16px;font-size:14.5px;line-height:1.4}
+.note-b small{display:block;color:var(--muted);font-size:12px;margin-bottom:2px;font-weight:600}
+.people{padding:4px 0}
+.person{display:flex;align-items:center;gap:12px;padding:9px 14px}
+.person .grow small{display:block;color:var(--muted);font-size:12.5px}
+.fee{display:flex;gap:12px;padding:14px;align-items:flex-start}
+.fee-amt{font-family:var(--f-display);font-size:26px;font-weight:760;min-width:56px;font-variant-numeric:tabular-nums}
+.fee p{font-size:13.5px;color:var(--muted)}
+.fee strong{color:var(--ink);display:block;font-size:14.5px}
+.center-hero{display:flex;flex-direction:column;align-items:center;text-align:center;gap:10px;padding:22px 16px 6px}
+.center-hero h1{font-family:var(--f-display);font-size:34px;font-weight:780;letter-spacing:-.03em;line-height:1.02;text-wrap:balance}
+.center-hero p{color:var(--muted);max-width:30ch}
+.badge-circle{width:72px;height:72px;border-radius:50%;display:grid;place-items:center}
+.badge-circle.good{background:var(--good-soft);color:var(--good)}
+.badge-circle.seat{background:var(--seat-soft);color:var(--seat-ink)}
+.badge-circle.muted{background:var(--surface-3);color:var(--muted)}
+.cal-card{display:flex;gap:12px;align-items:center;padding:12px 14px}
+.cal-date{width:50px;border-radius:12px;overflow:hidden;text-align:center;background:var(--surface-3);flex:none}
+.cal-date span{display:block;background:var(--bad);color:#fff;font-size:10.5px;font-weight:700;letter-spacing:.06em;padding:2px 0}
+.cal-date b{display:block;font-family:var(--f-display);font-size:22px;padding:2px 0 4px}
+
+/* ---------- Messages ---------- */
+.im-head{position:sticky;top:0;z-index:5;display:grid;grid-template-columns:60px 1fr 60px;align-items:center;padding:4px 6px 8px;background:var(--surface-2);border-bottom:1px solid var(--line)}
+.im-head .nb-btn{color:var(--imsg)}
+.im-who{display:flex;flex-direction:column;align-items:center;gap:3px;font-size:11.5px;font-weight:600}
+.im-ava{width:46px;height:46px;border-radius:50%;background:linear-gradient(160deg,#9aa0b4,#6c7289);color:#fff;display:grid;place-items:center}
+.thread{display:flex;flex-direction:column;gap:4px;padding:6px 12px 16px}
+.im-ts{text-align:center;font-size:11.5px;color:var(--muted);margin:16px 0 6px;font-weight:500}
+.im-ts b{font-weight:650}
+.bub{max-width:80%;padding:8px 13px;border-radius:19px;font-size:15.5px;line-height:1.32;overflow-wrap:anywhere}
+.bub.in{background:var(--imsg-gray);color:var(--ink);align-self:flex-start;border-bottom-left-radius:6px}
+.bub.out{background:var(--imsg);color:#fff;align-self:flex-end;border-bottom-right-radius:6px}
+.bub .lnk{color:var(--imsg);text-decoration:underline}
+.bub-from{font-size:11.5px;color:var(--muted);margin:6px 0 1px 12px}
+.lp{width:250px;max-width:80%;align-self:flex-start;border-radius:18px;overflow:hidden;background:var(--imsg-gray);text-align:left;margin-top:2px}
+.lp-img{height:118px;display:flex;align-items:flex-end;padding:12px;color:#fff;font-family:var(--f-display);font-weight:760;font-size:22px;letter-spacing:-.02em;line-height:1.05;
+  background:linear-gradient(155deg, hsl(var(--h) 62% 52%), hsl(calc(var(--h) + 30) 60% 28%))}
+.lp-t{padding:8px 12px 10px}
+.lp-t strong{display:block;font-size:14px;line-height:1.25}
+.lp-t small{color:var(--muted);font-size:12px}
+.lp.gone{opacity:.55}
+.im-note{font-size:11.5px;color:var(--muted);text-align:center;padding:4px 20px 0}
+.im-comp{display:flex;gap:8px;align-items:center;padding:8px 14px 30px;border-top:1px solid var(--line);background:var(--surface-2)}
+.im-in{flex:1;min-width:0;border-radius:19px;border:1px solid var(--line);padding:8px 14px;background:var(--surface);color:var(--ink);font:inherit;font-size:15.5px}
+.im-in:disabled{opacity:.6}
+.im-send{width:32px;height:32px;border-radius:50%;background:var(--imsg);color:#fff;display:grid;place-items:center;flex:none}
+.im-send:disabled{opacity:.35}
+
+/* ---------- Friends ---------- */
+.seg{display:flex;gap:6px;overflow-x:auto;padding:4px 16px 10px;scrollbar-width:none}
+.seg::-webkit-scrollbar{display:none}
+.seg button{flex:none;padding:8px 13px;border-radius:999px;font-weight:620;font-size:14px;background:var(--surface);border:1px solid var(--line);white-space:nowrap}
+.seg button.on{background:var(--ink);color:var(--surface);border-color:var(--ink)}
+.seg button small{opacity:.65;margin-left:4px;font-variant-numeric:tabular-nums}
+.inp{width:100%;height:50px;border-radius:15px;border:1.5px solid var(--line);background:var(--surface);color:var(--ink);padding:0 14px;font:inherit;font-size:16px}
+.inp:focus{border-color:var(--accent);outline:none}
+.follow-btn{padding:6px 12px;border-radius:10px;font-size:13px;font-weight:650;background:var(--accent);color:var(--accent-ink)}
+.follow-btn.on{background:var(--surface-3);color:var(--muted)}
+
+/* ---------- Overlays ---------- */
+.scrim{position:absolute;inset:0;background:var(--scrim);z-index:60;display:flex;align-items:flex-end;animation:fade .18s ease}
+.sheet{width:100%;max-height:90%;overflow:auto;background:var(--surface);border-radius:28px 28px 0 0;padding:10px 16px 28px;animation:up .26s cubic-bezier(.2,.8,.2,1);display:flex;flex-direction:column;gap:12px}
+.grab{width:38px;height:5px;border-radius:3px;background:var(--line);margin:0 auto 4px;flex:none}
+.sheet h2{font-family:var(--f-display);font-size:23px;font-weight:750;letter-spacing:-.02em;text-wrap:balance}
+.sheet p{color:var(--muted);font-size:14px}
+.banner-wrap{position:absolute;top:52px;left:10px;right:10px;z-index:70}
+.banner{width:100%;text-align:left;display:grid;grid-template-columns:38px 1fr;gap:2px 10px;padding:11px 13px;border-radius:24px;background:var(--surface);border:1px solid var(--line);box-shadow:0 14px 34px rgba(0,0,0,.22);animation:drop .38s cubic-bezier(.2,.9,.25,1.1)}
+.banner .logo{width:38px;height:38px;border-radius:10px;grid-row:span 3}
+.banner-app{display:flex;justify-content:space-between;font-size:11.5px;color:var(--muted);font-weight:600;letter-spacing:.03em}
+.banner strong{font-size:14.5px;line-height:1.25}
+.banner span.b{font-size:13.5px;color:var(--ink);line-height:1.3}
+.toast{position:absolute;left:50%;bottom:104px;transform:translateX(-50%);background:var(--ink);color:var(--surface);padding:10px 16px;border-radius:14px;font-size:13.5px;font-weight:620;z-index:65;width:max-content;max-width:86%;text-align:center;animation:pop .22s ease;box-shadow:0 10px 26px rgba(0,0,0,.25)}
+@keyframes fade{from{opacity:0}}
+@keyframes up{from{transform:translateY(40px);opacity:.4}}
+@keyframes drop{from{transform:translateY(-110%);opacity:0}}
+@keyframes pop{from{transform:translate(-50%,10px);opacity:0}}
+
+/* ---------- Demo rail ---------- */
+.demo{width:304px;flex:none;align-self:center;background:var(--surface);border:1px solid var(--line);border-radius:26px;padding:20px;box-shadow:var(--shadow);max-height:calc(100vh - 48px);overflow:auto}
+.demo-in{display:flex;flex-direction:column;gap:18px}
+.demo h2{font-family:var(--f-display);font-size:24px;font-weight:760;letter-spacing:-.02em;margin-top:2px}
+.demo-lede{color:var(--muted);font-size:13px;margin-top:4px}
+.demo-block{display:flex;flex-direction:column;gap:8px}
+.who{display:grid;grid-template-columns:repeat(6,1fr);gap:6px}
+.who button{border-radius:50%;padding:2px;border:2px solid transparent;justify-self:center}
+.who button.on{border-color:var(--accent)}
+.demo-note{font-size:12.5px;color:var(--muted);line-height:1.4}
+.demo-note b{color:var(--ink)}
+.demo-clock{font-family:var(--f-mono);font-size:13px;font-weight:600;background:var(--surface-3);border-radius:12px;padding:9px 12px;font-variant-numeric:tabular-nums}
+.demo-row{display:flex;gap:8px;flex-wrap:wrap}
+.dbtn{min-height:38px;border-radius:12px;padding:0 12px;font-weight:640;font-size:13.5px;background:var(--surface-3);display:inline-flex;align-items:center;gap:6px}
+.dbtn.primary{background:var(--seat);color:#2a1a00}
+.dbtn:disabled{opacity:.4}
+.demo-steps{margin:0;padding-left:18px;font-size:13px;color:var(--muted);display:flex;flex-direction:column;gap:6px;line-height:1.4}
+.demo-steps b{color:var(--ink);font-weight:640}
+
+@media (max-width:760px){
+  .demo{width:100%;max-width:393px}
+}
+@media (max-width:520px){
+  .stage{padding:0;display:block;height:100%}
+  .phone{width:100%;height:100%;min-height:0;border-radius:0;padding:0;background:none;box-shadow:none}
+  .screen{border-radius:0}
+  .island,.sbar,.demo{display:none}
+  .demo-only{display:inline-flex}
+  .lg{padding-top:12px}
+  .tabbar{padding-bottom:max(10px, env(safe-area-inset-bottom, 0px))}
+  .banner-wrap{top:8px}
+  .toast{bottom:90px}
+  .foot,.im-comp{padding-bottom:max(14px, env(safe-area-inset-bottom, 0px))}
+}
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{animation:none!important;transition:none!important}
+}
+</style>
+</head>
+<body>
+<div class="stage">
+  <div class="phone">
+    <div class="screen" id="screen">
+      <div class="island" aria-hidden="true"></div>
+      <div class="sbar" id="sbar"></div>
+      <div class="main" id="main"></div>
+      <div id="layer"></div>
+      <div id="banner"></div>
+      <div id="toast"></div>
+    </div>
+  </div>
+  <aside class="demo" id="demo" aria-label="Prototype controls"></aside>
+</div>
+
+<script>
+'use strict';
+/* ======================================================================
+   SeatSwap — clickable prototype. Everything is in-memory; reload resets.
+   ====================================================================== */
+const HOUR = 36e5, MIN = 6e4;
+// Simulated clock: the demo always starts at 2:00 PM today, then ticks in real time.
+const SIM_START = (() => { const d = new Date(); d.setHours(14, 0, 0, 0); return d.getTime(); })();
+const BOOT = Date.now();
+let S;
+const now = () => SIM_START + (Date.now() - BOOT) + S.offset;
+
+/* ---------- Static data ---------- */
+const P = {
+  alex:{n:'Alex Kim',h:222}, maya:{n:'Maya Lin',h:338}, jordan:{n:'Jordan Blake',h:24}, priya:{n:'Priya Shah',h:282},
+  sam:{n:'Sam Ortiz',h:158}, leo:{n:'Leo Martins',h:200}, nina:{n:'Nina Petrova',h:312}, theo:{n:'Theo Grant',h:92},
+  ava:{n:'Ava Castillo',h:10}, ben:{n:'Ben Adler',h:44}, zoe:{n:'Zoe Hart',h:322}, kai:{n:'Kai Nakamura',h:184},
+  rosa:{n:'Rosa Díaz',h:356}, omar:{n:'Omar Haddad',h:258}, lucy:{n:'Lucy Chen',h:128}, dev:{n:'Dev Patel',h:34},
+  ivy:{n:'Ivy Moreau',h:296}, eli:{n:'Eli Brooks',h:238},
+};
+const R = {
+  osteria:{n:'Osteria Nove',c:'Italian',hood:'Arts District',h:8,code:'ONV'},
+  laurent:{n:'Bistro Laurent',c:'French bistro',hood:'Silver Lake',h:348,code:'BLR'},
+  umi:{n:'Umi Counter',c:'Omakase',hood:'Little Tokyo',h:204,code:'UMI'},
+  brasa:{n:'Casa Brasa',c:'Argentine grill',hood:'Highland Park',h:18,code:'CBR'},
+  larder:{n:'The Larder',c:'New American',hood:'Echo Park',h:142,code:'LRD'},
+  saffron:{n:'Saffron & Salt',c:'Indian',hood:'Culver City',h:38,code:'SNS'},
+  kinfolk:{n:'Kinfolk Table',c:'Family-style',hood:'Los Feliz',h:96,code:'KFT'},
+  ichi:{n:'Noodle Bar Ichi',c:'Ramen',hood:'Sawtelle',h:0,code:'NBI'},
+};
+
+/* ---------- Icons ---------- */
+const ICONS = {
+  cloche:'<path d="M4 16a8 8 0 0 1 16 0Z"/><path d="M2 19h20"/><path d="M12 5v3"/>',
+  cal:'<rect x="3.5" y="5" width="17" height="15" rx="3"/><path d="M3.5 10h17M8 3v4M16 3v4"/>',
+  people:'<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.6a3.5 3.5 0 0 1 0 6.8M18 14a6 6 0 0 1 3.5 6"/>',
+  msg:'<path d="M12 4c5 0 9 3.1 9 7s-4 7-9 7c-1 0-2-.1-2.9-.4L5 19.5l1.2-3.6C4.2 14.6 3 12.9 3 11c0-3.9 4-7 9-7Z"/>',
+  back:'<path d="M15 5l-7 7 7 7"/>',
+  fwd:'<path d="M9 5l7 7-7 7"/>',
+  check:'<path d="M5 12.5l4.5 4.5L19 7.5"/>',
+  plus:'<path d="M12 5v14M5 12h14"/>',
+  x:'<path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/>',
+  star:'<path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9Z"/>',
+  clock:'<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',
+  bolt:'<path d="M13 3L5 13.5h6L10 21l8-10.5h-6Z"/>',
+  eye:'<path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="3"/>',
+  send:'<path d="M12 19V5M6 11l6-6 6 6"/>',
+  ff:'<path d="M4 6l7 6-7 6ZM12 6l7 6-7 6Z"/>',
+  list:'<path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r="1"/><circle cx="4.5" cy="12" r="1"/><circle cx="4.5" cy="18" r="1"/>',
+  chair:'<path d="M7 3.5v9h10v-9M5 12.5h14M7 12.5V20M17 12.5V20"/>',
+  link:'<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>',
+  lock:'<rect x="5" y="10.5" width="14" height="10" rx="2.5"/><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5"/>',
+  gone:'<circle cx="12" cy="12" r="8.5"/><path d="M6 6l12 12"/>',
+  cake:'<path d="M4 20h16M5 20v-7h14v7M5 16c2 1.5 4-1.5 7 0s5-1.5 7 0M12 13V9M12 6.5v0"/>',
+  signal:'<path d="M4 18v-2M9 18v-5M14 18v-8M19 18V7"/>',
+};
+const ic = (n, s = 20, extra = '') => `<svg class="ic" width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" ${extra}>${ICONS[n]}</svg>`;
+const logo = (s = 16) => `<span class="logo">${ic('chair', s)}</span>`;
+
+/* ---------- Small helpers ---------- */
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const first = id => P[id].n.split(' ')[0];
+const nm = id => id === S.viewer ? 'You' : first(id);
+const people = n => n === 1 ? '1 person' : `${n} people`;
+const seatsW = n => n === 1 ? '1 seat' : `${n} seats`;
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+function names(ids, max = 2) {
+  const n = ids.map(nm);
+  if (n.length <= max) return n.length === 2 ? `${n[0]} & ${n[1]}` : n.join(', ');
+  return `${n.slice(0, max).join(', ')} +${n.length - max}`;
+}
+const resOf = sp => S.res[sp.resId];
+const restOf = sp => R[resOf(sp).rest];
+const uid = p => p + (++S.seq);
+
+function startOfDay(t) { const x = new Date(t); x.setHours(0, 0, 0, 0); return x.getTime(); }
+function dayLabel(t) {
+  const dd = Math.round((startOfDay(t) - startOfDay(now())) / 864e5);
+  if (dd === 0) return 'Today';
+  if (dd === 1) return 'Tomorrow';
+  if (dd === -1) return 'Yesterday';
+  return new Date(t).toLocaleDateString('en-US', {weekday:'short', month:'short', day:'numeric'});
+}
+const clock = t => new Date(t).toLocaleTimeString('en-US', {hour:'numeric', minute:'2-digit'});
+const when = t => `${dayLabel(t)} · ${clock(t)}`;
+const whenLower = t => { const d = dayLabel(t); return `${/^(Today|Tomorrow|Yesterday)$/.test(d) ? d.toLowerCase() : 'on ' + d} at ${clock(t)}`; };
+function dur(ms) {
+  if (ms <= 0) return 'now';
+  const m = Math.floor(ms / MIN), h = Math.floor(m / 60), d = Math.floor(h / 24);
+  if (d >= 2) return `${d}d ${h % 24}h`;
+  if (h >= 1) return `${h}h ${String(m % 60).padStart(2, '0')}m`;
+  return `${m}m ${String(Math.floor(ms / 1000) % 60).padStart(2, '0')}s`;
+}
+function ago(t) {
+  const m = Math.floor((now() - t) / MIN);
+  if (m < 1) return 'just now';
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  return h < 24 ? `${h}h ago` : `${Math.floor(h / 24)}d ago`;
+}
+function shortWhen(t) { const d = dayLabel(t); return d === 'Today' ? clock(t) : d === 'Tomorrow' ? `Tmrw ${clock(t)}` : d === 'Yesterday' ? `Yest ${clock(t)}` : `${new Date(t).toLocaleDateString('en-US', {weekday:'short'})} ${clock(t)}`; }
+const cd = t => `<span data-cd="${t}">${dur(t - now())}</span>`;
+
+/* ---------- Visual atoms ---------- */
+function av(id, s = 32) {
+  const p = P[id]; const ini = p.n.split(' ').map(w => w[0]).join('').slice(0, 2);
+  return `<span class="av" style="--h:${p.h};--s:${s}px" title="${esc(p.n)}">${ini}</span>`;
+}
+const avs = (ids, s = 26, max = 5) => `<span class="avs">${ids.slice(0, max).map(i => av(i, s)).join('')}</span>`;
+function tile(rk, s = 48) {
+  const r = R[rk]; const ini = r.n.replace(/^The /, '').split(/[\s&]+/).filter(Boolean).map(w => w[0]).join('').slice(0, 2);
+  return `<span class="tile" style="--h:${r.h};--s:${s}px" aria-hidden="true">${ini}</span>`;
+}
+const dots = (filled, open) => `<span class="dots" aria-hidden="true">${'<i class="dot"></i>'.repeat(filled)}${'<i class="dot open"></i>'.repeat(open)}</span>`;
+// A round table with the party seated around it; open seats are dashed saffron.
+function table(att, open, size = 150) {
+  const n = att.length + open, seat = size > 130 ? 34 : 28, r = size / 2 - seat / 2 - 2, c = size / 2;
+  let seats = '';
+  for (let i = 0; i < n; i++) {
+    const a = -Math.PI / 2 + i * 2 * Math.PI / n;
+    const x = c + r * Math.cos(a) - seat / 2, y = c + r * Math.sin(a) - seat / 2;
+    const id = att[i];
+    seats += id
+      ? `<span class="rt-seat" style="left:${x}px;top:${y}px">${av(id, seat)}</span>`
+      : `<span class="rt-seat rt-open" style="left:${x}px;top:${y}px;width:${seat}px;height:${seat}px">+</span>`;
+  }
+  const inset = seat - 2;
+  return `<div class="rtable" style="width:${size}px;height:${size}px" role="img" aria-label="Table for ${n}, ${open} open">
+    <div class="rtable-top" style="inset:${inset}px"><div><b>${n}</b>seats</div></div>${seats}</div>`;
+}
+
+/* ---------- Social graph ---------- */
+const fol = id => S.following[id] || [];
+const knows = (a, b) => fol(a).includes(b) || fol(b).includes(a);
+// Friends of friends: people the organizer's follows follow, whom the organizer doesn't follow.
+function fofOf(org) {
+  const f = fol(org), out = [];
+  for (const x in P) {
+    if (x === org || f.includes(x)) continue;
+    const via = f.filter(y => fol(y).includes(x));
+    if (via.length) out.push({id:x, via});
+  }
+  return out.sort((a, b) => b.via.length - a.via.length);
+}
+const viaLabel = via => `Followed by ${nm(via[0])}${via.length > 1 ? ` +${via.length - 1}` : ''}`;
+// Recommended: know 2+ attendees, ranked by how many attendees they know, then mutuals with the organizer.
+function recsFor(org, att) {
+  const out = [];
+  for (const x in P) {
+    if (x === org || att.includes(x)) continue;
+    const known = att.filter(a => knows(x, a));
+    if (known.length >= 2) out.push({id:x, known, mutuals: fol(org).filter(y => y !== x && knows(y, x)).length});
+  }
+  return out.sort((a, b) => b.known.length - a.known.length || b.mutuals - a.mutuals);
+}
+function candidates(org, att) {
+  const excl = new Set([org, ...att]);
+  const cf = (S.cf[org] || []).filter(x => !excl.has(x));
+  const recs = recsFor(org, att).filter(r => !cf.includes(r.id));
+  const taken = new Set([...cf, ...recs.map(r => r.id)]);
+  const ind = fol(org).filter(x => !excl.has(x) && !taken.has(x));
+  const fof = fofOf(org).filter(f => !excl.has(f.id) && !taken.has(f.id));
+  const lists = (S.lists[org] || []).map(l => ({...l, members: l.members.filter(x => !excl.has(x))}));
+  return {cf, recs, ind, fof, lists};
+}
+// How a recipient got the spot. Priority: Close Friend, a picked list, Recommended, individual, FoF.
+function sourceFor(org, att, id, listIds) {
+  if ((S.cf[org] || []).includes(id)) return {src:'cf'};
+  const l = (S.lists[org] || []).find(l => listIds.includes(l.id) && l.members.includes(id));
+  if (l) return {src:'list', label:l.name};
+  const known = att.filter(a => a !== id && knows(id, a));
+  if (known.length >= 2) return {src:'rec', known};
+  if (fol(org).includes(id)) return {src:'ind'};
+  return {src:'fof', via: fol(org).filter(y => fol(y).includes(id))};
+}
+function srcTag(a) { // organizer-facing
+  switch (a.src) {
+    case 'cf': return 'Close Friend';
+    case 'list': return a.label;
+    case 'rec': return `Recommended · knows ${names(a.known)}`;
+    case 'ind': return 'Picked individually';
+    default: return a.via && a.via.length ? viaLabel(a.via) : 'Friend of friends';
+  }
+}
+function whyTag(sp, a) { // recipient-facing "why you see it"
+  const o = first(sp.org);
+  switch (a.src) {
+    case 'cf': return {i:'star', t:`You're one of ${o}'s Close Friends`};
+    case 'list': return {i:'list', t:`On ${o}'s list · ${a.label}`};
+    case 'rec': return {i:'people', t:`Recommended · you know ${names(a.known.filter(k => k !== S.viewer))}`};
+    case 'ind': return {i:'check', t:`${o} picked you`};
+    default: return {i:'link', t:`Friend of friends · ${a.via && a.via.length ? viaLabel(a.via) : ''}`};
+  }
+}
+
+/* ---------- Seed ---------- */
+function seed() {
+  S = {
+    offset:0, viewer:'alex', stack:[{s:'feed'}], sheet:null, draft:null, edit:null, listDraft:null, banner:null, toast:null,
+    following:{
+      alex:['maya','jordan','priya','sam','leo','nina','theo','ava','ben'], maya:['alex','priya','zoe','kai','sam'],
+      jordan:['alex','rosa','omar'], priya:['alex','maya','lucy','zoe'], sam:['alex','maya','dev','kai'],
+      leo:['alex','nina','ivy'], nina:['leo','theo','ivy'], theo:['nina','eli'], ava:['alex','ben'], ben:['ava','eli'],
+      zoe:['maya','priya','kai'], kai:['maya','sam','zoe'], rosa:['jordan'], omar:['jordan'], lucy:['priya'],
+      dev:['sam'], ivy:['leo','nina'], eli:['theo','ben'],
+    },
+    cf:{alex:['maya','priya','sam'], maya:['alex','priya'], leo:['nina'], ben:['ava'], zoe:['kai'], jordan:['rosa']},
+    lists:{
+      alex:[{id:'l1',name:'Fencing friends',members:['leo','nina','theo']},{id:'l2',name:'Book club',members:['ava','priya','ben']}],
+      leo:[{id:'l3',name:'Fencing crew',members:['alex','nina','theo','ivy']}],
+    },
+    res:{}, spots:{}, texts:{}, unread:{}, pending:{}, groups:{}, compose:{}, cal:{}, seq:10,
+  };
+  const at = (d, h, m = 0) => { const x = new Date(SIM_START); x.setDate(x.getDate() + d); x.setHours(h, m, 0, 0); return x.getTime(); };
+  const addRes = (id, owner, rest, time, party, att) => { S.res[id] = {id, owner, rest, time, party, att, code:`${R[rest].code}-${4000 + Object.keys(S.res).length * 317}`}; };
+  addRes('r1','alex','osteria', at(1,20), 4, ['alex','maya','sam']);
+  addRes('r2','alex','kinfolk', at(3,19,30), 6, ['alex','jordan','ava','ben','leo','nina']);
+  addRes('r3','maya','laurent', at(0,20,30), 6, ['maya','zoe','kai','priya']);
+  addRes('r4','leo','umi', at(2,19), 4, ['leo','nina','ivy']);
+  addRes('r5','zoe','brasa', at(1,19,30), 4, ['zoe','kai','lucy']);
+  addRes('r6','jordan','larder', at(3,20), 6, ['jordan','rosa','sam','leo']);
+  addRes('r7','ben','saffron', at(0,19), 3, ['ben','eli']);
+
+  seedSpot('s1','r1',{seats:1, fee:25, ago:1*HOUR, lists:['l1'],
+    note:"Priya's out with a cold. Chef's tasting menu, we'll split the bill evenly.",
+    aud:[['kai','viewed'],['jordan','viewed'],['leo','declined'],['nina','notified'],['theo','notified'],
+         ['zoe','queued'],['lucy','queued'],['dev','queued'],['ivy','queued'],['eli','queued'],['rosa','queued'],['omar','queued']]});
+  seedSpot('s2','r3',{seats:2, fee:0, ago:40*MIN, allAtOnce:true,
+    note:"Zoe's birthday! Two friends bailed. Come hungry, the duck is the move.",
+    aud:[['alex','notified'],['sam','viewed'],['lucy','notified'],['jordan','declined'],['dev','notified']]});
+  seedSpot('s3','r4',{seats:1, fee:50, ago:3*HOUR, lists:['l3'],
+    note:'Omakase is prepaid, so please only grab it if you can make it.',
+    aud:[['alex','notified'],['theo','viewed'],['maya','queued'],['jordan','queued'],['priya','queued']]});
+  seedSpot('s4','r5',{seats:1, fee:15, ago:11*HOUR, stage2After:10*HOUR,
+    note:'Lucy found this place. Big grill platter for four.',
+    aud:[['maya','viewed'],['priya','declined'],['alex','notified',2],['sam','viewed',2]]});
+  seedSpot('s5','r6',{seats:2, fee:25, ago:2*HOUR,
+    note:'Sam and Leo are coming from climbing, so we might run 10 minutes late.',
+    aud:[['alex','notified'],['omar','notified'],['maya','queued'],['priya','queued'],['theo','queued']]});
+  seedSpot('s6','r7',{seats:1, fee:0, ago:30*MIN, allAtOnce:true,
+    note:'Eli and I have a table for three. Need one more for the thali.',
+    aud:[['ava','notified'],['theo','notified']]});
+  S.groups.r1 = [{from:'maya', text:'Priya says feel better soon from all of us', at:now() - 50*MIN}];
+}
+function seedSpot(id, resId, o) {
+  const r = S.res[resId], t = now();
+  const sp = {id, resId, org:r.owner, seats:o.seats, left:o.seats, fee:o.fee, note:o.note, created:t - o.ago, status:'open',
+    stage2: !!(o.allAtOnce || o.stage2After), prompted: !!(o.allAtOnce || o.stage2After), dismissed:false,
+    aud:{}, log:[], joined:[], fees:[]};
+  S.spots[id] = sp; r.spot = id;
+  let n1 = 0, n2 = 0;
+  for (const [pid, status, stage] of o.aud) {
+    const src = sourceFor(sp.org, r.att, pid, o.lists || []);
+    const sentAt = stage === 2 ? sp.created + o.stage2After : sp.created;
+    sp.aud[pid] = {...src, status, stage: status === 'queued' || stage === 2 ? 2 : 1, sentAt: status === 'queued' ? null : sentAt};
+    if (status === 'queued') continue;
+    stage === 2 ? n2++ : n1++;
+    addText(pid, sp, sentAt, 'new', status === 'notified');
+  }
+  sp.log.push(o.allAtOnce
+    ? {t:sp.created, title:'Sent to everyone at once', detail:`Under 12h to dinner · ${people(n1)} · push + text each`}
+    : {t:sp.created, title:'Stage 1 · Close Friends + Recommended', detail:`${people(n1)} · push + text each`});
+  if (o.stage2After) {
+    sp.log.push({t:sp.created + o.stage2After - 5*MIN, title:'Expansion suggested', detail:'Still open after 10 hours', kind:'warn'});
+    sp.log.push({t:sp.created + o.stage2After, title:'Stage 2 · Friends of friends', detail:`${people(n2)} · push + text each`});
+  }
+}
+
+/* ---------- Messaging + alerts ---------- */
+function textBody(sp, kind) {
+  const r = resOf(sp), rest = R[r.rest];
+  return kind === 'reopen'
+    ? `A seat just reopened at ${rest.n} ${whenLower(r.time)}. ${first(sp.org)} sent it to you again:`
+    : `${first(sp.org)} has ${seatsW(sp.left)} open at ${rest.n} ${whenLower(r.time)}. Tap to see who's going:`;
+}
+function addText(pid, sp, at, kind, unread) {
+  (S.texts[pid] ||= []).push({spot:sp.id, at, body:textBody(sp, kind)});
+  if (unread) S.unread[pid] = (S.unread[pid] || 0) + 1;
+}
+// Push notification to a person. Shown immediately if they're the current viewer, otherwise held until you switch to them.
+function alertTo(pid, b) {
+  if (pid === S.viewer) showBanner(b);
+  else (S.pending[pid] ||= []).push(b);
+}
+// Send = push + text link to one person.
+function notify(sp, pid, stage, kind = 'new') {
+  const a = sp.aud[pid];
+  if (a.status !== 'viewed') a.status = 'notified';
+  a.stage = stage; a.sentAt = now();
+  addText(pid, sp, now(), kind, true);
+  const r = resOf(sp);
+  alertTo(pid, {
+    title: kind === 'reopen' ? `A seat reopened at ${R[r.rest].n}` : `${first(sp.org)} has ${seatsW(sp.left)} open`,
+    body: `${R[r.rest].n} · ${when(r.time)}. Tap to see who's going.`, go:`spot:${sp.id}`});
+}
+
+/* ---------- Core rules ---------- */
+function visibleTo(sp, me) {
+  const a = sp.aud[me];
+  return sp.status === 'open' && sp.org !== me && !!a && (a.status === 'notified' || a.status === 'viewed');
+}
+function markViewed(pid, id) {
+  const sp = S.spots[id]; const a = sp && sp.aud[pid];
+  if (a && a.status === 'notified' && sp.status === 'open') { a.status = 'viewed'; a.viewedAt = now(); }
+}
+function acceptAs(pid, id) {
+  const sp = S.spots[id], r = resOf(sp), a = sp.aud[pid];
+  if (!a || sp.status !== 'open' || sp.left <= 0 || !['notified','viewed'].includes(a.status)) return false;
+  sp.left--; a.status = 'accepted'; a.at = now();
+  r.att.push(pid); sp.joined.push(pid);
+  sp.log.push({t:now(), title:`${first(pid)} took a seat`, detail: sp.left ? `${seatsW(sp.left)} still open` : 'That was the last seat', kind:'good'});
+  alertTo(sp.org, {title:`${first(pid)} accepted your open spot`, body:`${R[r.rest].n} · ${sp.left ? `${seatsW(sp.left)} left` : 'Your table is full'}`, go:`live:${id}`});
+  if (sp.left === 0) {
+    sp.status = 'filled'; sp.filledAt = now();
+    sp.log.push({t:now(), title:'Filled', detail:'Removed from every feed', kind:'good'});
+  }
+  (S.groups[r.id] ||= []).push({from:'sys', text:`${P[pid].n} joined via SeatSwap`, at:now()});
+  return true;
+}
+function declineAs(pid, id) {
+  const a = S.spots[id].aud[pid];
+  if (!a || !['notified','viewed'].includes(a.status)) return false;
+  a.status = 'declined'; a.at = now();
+  return true;
+}
+function cancelSeat(pid, id) {
+  const sp = S.spots[id], r = resOf(sp), a = sp.aud[pid];
+  r.att = r.att.filter(x => x !== pid);
+  sp.joined = sp.joined.filter(x => x !== pid);
+  a.status = 'cancelled'; a.at = now();
+  if (sp.fee) sp.fees.push({id:pid, amt:sp.fee});
+  const feeLine = sp.fee ? `$${sp.fee} no-show fee applies to ${first(pid)}. ` : '';
+  if (sp.status === 'open' || sp.status === 'filled') {
+    sp.left++; sp.status = 'open';
+    const again = Object.keys(sp.aud).filter(k => ['notified','viewed'].includes(sp.aud[k].status));
+    sp.log.push({t:now(), title:`${first(pid)} canceled · seat reopened`, detail:`${feeLine}Sent again to ${people(again.length)} in the same audience`, kind:'bad'});
+    again.forEach(k => notify(sp, k, sp.aud[k].stage, 'reopen'));
+  } else {
+    sp.log.push({t:now(), title:`${first(pid)} canceled`, detail:feeLine || 'No fee', kind:'bad'});
+  }
+  alertTo(sp.org, {title:`${first(pid)} canceled their seat`, body:`${R[r.rest].n} · the seat reopened to the same audience.${sp.fee ? ` $${sp.fee} fee applies to them.` : ''}`, go:`live:${id}`});
+}
+function expandSpot(id) {
+  const sp = S.spots[id], r = resOf(sp);
+  let ids = Object.keys(sp.aud).filter(k => sp.aud[k].status === 'queued');
+  if (!ids.length) {
+    ids = fofOf(sp.org).map(f => f.id).filter(x => !r.att.includes(x) && !sp.aud[x]);
+    ids.forEach(x => { sp.aud[x] = {...sourceFor(sp.org, r.att, x, []), status:'queued', stage:2}; });
+  }
+  ids.forEach(x => notify(sp, x, 2));
+  sp.stage2 = true; sp.prompted = true;
+  sp.log.push({t:now(), title:'Stage 2 · Friends of friends', detail:`${people(ids.length)} · push + text each`});
+  return ids.length;
+}
+// Runs every tick: expiry at start time, and the "Expand to FoF?" prompt.
+function checkTime() {
+  let changed = false; const t = now();
+  for (const sp of Object.values(S.spots)) {
+    const r = resOf(sp);
+    if (sp.status === 'open' && t >= r.time) {
+      sp.status = 'expired';
+      sp.log.push({t:r.time, title:'Expired at start time', detail:'Removed from every feed', kind:'muted'});
+      changed = true;
+    } else if (sp.status === 'open' && !sp.stage2 && !sp.prompted) {
+      const after10 = t - sp.created >= 10*HOUR, under12 = r.time - t < 12*HOUR;
+      if (after10 || under12) {
+        sp.prompted = true;
+        sp.promptWhy = under12 ? 'Dinner is under 12 hours away' : 'Still open after 10 hours';
+        sp.log.push({t, title:'Expansion suggested', detail:sp.promptWhy, kind:'warn'});
+        alertTo(sp.org, {title:`${seatsW(sp.left)} still open at ${R[r.rest].n}`, body:`${sp.promptWhy}. Expand to friends of friends?`, go:`live:${sp.id}`});
+        changed = true;
+      }
+    }
+  }
+  return changed;
+}
+
+/* ---------- Navigation ---------- */
+const cur = () => S.stack[S.stack.length - 1];
+function parseRoute(str) { const [s, id] = str.split(':'); return {s, id}; }
+function saveScroll() { const v = document.getElementById('view'); if (v) cur().scroll = v.scrollTop; }
+function push(route) {
+  saveScroll();
+  if (route.s === 'spot') markViewed(S.viewer, route.id);
+  if (route.s === 'messages') S.unread[S.viewer] = 0;
+  S.stack.push(route); render(true);
+}
+function pop() { if (S.stack.length > 1) { S.stack.pop(); render(false, true); } }
+function goRoot(s) { S.stack = [{s}]; render(true); }
+
+/* ---------- Render ---------- */
+let lastTop = null;
+function render(fresh = false, restore = false) {
+  const v = document.getElementById('view');
+  if (v && !fresh && !restore && lastTop === cur()) cur().scroll = v.scrollTop;
+  const r = cur(); lastTop = r;
+  const roots = ['feed', 'res', 'friends'];
+  let body;
+  switch (r.s) {
+    case 'feed': body = vFeed(); break;
+    case 'res': body = vRes(); break;
+    case 'resv': body = vResv(r.id); break;
+    case 'post': body = vPost(r.step); break;
+    case 'audience': body = vAudience(r); break;
+    case 'live': body = vLive(r.id); break;
+    case 'messages': body = vMessages(); break;
+    case 'group': body = vGroup(r.id); break;
+    case 'spot': body = vSpot(r.id); break;
+    case 'accepted': body = vAccepted(r.id); break;
+    case 'friends': body = vFriends(r); break;
+    case 'list': body = vListEdit(); break;
+    default: body = vFeed();
+  }
+  const outside = typeof body === 'object' ? body.outside : '';
+  const html = typeof body === 'object' ? body.html : body;
+  document.getElementById('main').innerHTML =
+    `<div class="view" id="view">${html}</div>${outside || ''}${roots.includes(r.s) ? tabbar(r.s) : ''}`;
+  const view = document.getElementById('view');
+  view.scrollTop = fresh ? (['messages', 'group'].includes(r.s) ? view.scrollHeight : 0) : (r.scroll || 0);
+  renderSheet(); renderStatus(); renderDemo();
+}
+function tabbar(cur) {
+  const t = (k, icn, label) => `<button class="tab ${cur === k ? 'on' : ''}" data-a="tab" data-v="${k}" aria-current="${cur === k}">${ic(icn, 24)}${label}</button>`;
+  return `<nav class="tabbar">${t('feed','cloche','Open spots')}${t('res','cal','Reservations')}${t('friends','people','Friends')}</nav>`;
+}
+function renderStatus() {
+  document.getElementById('sbar').innerHTML = `<span data-clock>${clock(now()).replace(/ [AP]M/, '')}</span><span class="sbar-r">${ic('signal', 17)}<svg width="25" height="12" viewBox="0 0 25 12" aria-hidden="true"><rect x=".5" y=".5" width="21" height="11" rx="3.5" fill="none" stroke="currentColor" opacity=".45"/><rect x="2" y="2" width="16" height="8" rx="2" fill="currentColor"/><rect x="23" y="4" width="1.6" height="4" rx=".8" fill="currentColor" opacity=".45"/></svg></span>`;
+}
+function lgHeader(title, sub) {
+  const u = S.unread[S.viewer] || 0;
+  return `<header class="lg"><div class="lg-top"><span class="brand">${logo()} SeatSwap</span>
+    <div class="lg-actions">
+      <button class="icon-btn demo-only" data-a="sheet" data-v="demo">${ic('ff', 14)} Demo</button>
+      <button class="icon-btn" data-a="go" data-r="messages" aria-label="Messages${u ? `, ${u} unread` : ''}">${ic('msg', 18)}${u ? `<span class="badge">${u}</span>` : ''}</button>
+      <button class="me-btn" data-a="sheet" data-v="viewer" aria-label="Viewing as ${esc(P[S.viewer].n)}. Switch person">${av(S.viewer, 28)}</button>
+    </div></div><h1>${title}</h1>${sub ? `<p class="lg-sub">${sub}</p>` : ''}</header>`;
+}
+function nav(title, {left, right = ''} = {}) {
+  const l = left ?? `<button class="nb-btn" data-a="back">${ic('back', 22)}<span>Back</span></button>`;
+  return `<nav class="nb"><div>${l}</div><div class="nb-t">${title}</div><div class="nb-r">${right}</div></nav>`;
+}
+const foot = (inner, note = '') => `<div class="foot">${inner}${note ? `<p class="foot-note">${note}</p>` : ''}</div>`;
+
+/* ---------- 1. Feed ---------- */
+function vFeed() {
+  const me = S.viewer;
+  const list = Object.values(S.spots).filter(sp => visibleTo(sp, me)).sort((a, b) => resOf(a).time - resOf(b).time);
+  const sub = me === 'alex' ? 'Seats your friends need filled, sent only to you and the people they picked.' : `What ${first(me)} sees. Spots only appear for the people they were sent to.`;
+  return lgHeader('Open spots', sub) + (list.length
+    ? `<div class="pad stack">${list.map(feedCard).join('')}</div>`
+    : `<div class="empty"><h3>No open spots right now</h3><p>When a friend needs to fill a seat and sends it your way, it shows up here and as a text.</p></div>`);
+}
+function feedCard(sp) {
+  const r = resOf(sp), rest = R[r.rest], a = sp.aud[S.viewer], w = whyTag(sp, a);
+  const others = r.att;
+  return `<article class="card fcard">
+    <button class="fcard-link" data-a="go" data-r="spot:${sp.id}" aria-label="Open ${esc(rest.n)} details">
+      <div class="row">${tile(r.rest, 48)}<div class="grow"><h3>${esc(rest.n)}</h3><p class="meta">${rest.c} · ${rest.hood}</p></div><span class="cd-chip">${cd(r.time)}</span></div>
+      <div class="row" style="justify-content:space-between"><span class="seats-line">${dots(r.att.length, sp.left)} ${seatsW(sp.left)} open</span><span class="meta">${when(r.time)}</span></div>
+      <div class="row">${avs(others, 26)}<span class="meta grow">${names(others, 3)} ${others.length === 1 ? 'is' : 'are'} going</span></div>
+      <span class="why">${ic(w.i, 14)}<span>${esc(w.t)}</span></span>
+    </button>
+    <div class="fcard-foot">
+      <button class="btn secondary sm" data-a="go" data-r="spot:${sp.id}">Details</button>
+      <button class="btn primary sm" data-a="accept" data-id="${sp.id}">Accept seat</button>
+    </div>
+  </article>`;
+}
+
+/* ---------- 2. My Reservations ---------- */
+function resStatus(r) {
+  const me = S.viewer, sp = r.spot && S.spots[r.spot], t = now();
+  const counts = sp ? tally(sp) : null;
+  if (r.time <= t) return {pill:'Past', tone:'muted', text:`${R[r.rest].n} · party of ${r.party}`};
+  if (r.owner !== me) {
+    const joined = sp && sp.aud[me] && sp.aud[me].status === 'accepted';
+    if (joined) return {pill:'Going', tone:'good', text:`Joined ${first(r.owner)}'s table via SeatSwap${sp.fee ? ` · $${sp.fee} fee if you cancel` : ''}`};
+    return {pill:'Going', tone:'good', text:`Hosted by ${first(r.owner)}${sp && sp.status === 'open' ? ` · filling ${seatsW(sp.left)}` : ''}`};
+  }
+  if (!sp || sp.status === 'cancelled') return {pill:'Full table', tone:'muted', text:`Party of ${r.party}. Someone drop out? Post an open spot.`};
+  if (sp.status === 'filled') return {pill:'Filled', tone:'good', text:`${names(sp.joined, 3)} took the open ${sp.seats === 1 ? 'seat' : 'seats'}`};
+  if (sp.status === 'expired') return {pill:'Expired', tone:'muted', text:'The open spot expired at start time'};
+  if (sp.prompted && !sp.stage2) return {pill:'Expand to FoF?', tone:'seat', text:`${seatsW(sp.left)} open · ${counts.notified + counts.viewed} waiting · ${counts.declined} declined`};
+  return {pill:`${seatsW(sp.left)} open`, tone:'seat', text:`${counts.sent} notified · ${counts.viewed} viewed · ${counts.declined} declined`};
+}
+function tally(sp) {
+  const c = {notified:0, viewed:0, declined:0, accepted:0, queued:0, removed:0, cancelled:0};
+  Object.values(sp.aud).forEach(a => c[a.status]++);
+  c.sent = c.notified + c.viewed + c.declined + c.accepted + c.cancelled;
+  return c;
+}
+function resRoute(r) {
+  const me = S.viewer, sp = r.spot && S.spots[r.spot];
+  if (sp && sp.org === me && sp.status !== 'cancelled') return `live:${sp.id}`;
+  if (sp && sp.aud[me] && sp.aud[me].status === 'accepted') return `accepted:${sp.id}`;
+  return `resv:${r.id}`;
+}
+function vRes() {
+  const me = S.viewer, t = now();
+  const mine = Object.values(S.res).filter(r => r.owner === me || r.att.includes(me)).sort((a, b) => a.time - b.time);
+  const up = mine.filter(r => r.time > t), past = mine.filter(r => r.time <= t);
+  const card = r => {
+    const st = resStatus(r), rest = R[r.rest];
+    return `<button class="card rcard" data-a="go" data-r="${resRoute(r)}">
+      <div class="row">${tile(r.rest, 44)}<div class="grow"><h3>${esc(rest.n)}</h3><p class="meta">${when(r.time)}</p></div>${r.time > t ? `<span class="cd-chip">${cd(r.time)}</span>` : ''}</div>
+      <div class="row">${avs(r.att, 24, 6)}<span class="meta">Party of ${r.party}${r.owner === me ? ' · you booked' : ` · booked by ${first(r.owner)}`}</span></div>
+      <div class="rstatus"><span class="pill ${st.tone}">${st.pill}</span><span>${esc(st.text)}</span></div>
+    </button>`;
+  };
+  return lgHeader('My Reservations', 'Each table you booked or joined, and how its open spot is doing.')
+    + `<button class="post-cta" data-a="post">${ic('plus', 20)} Post an Open Spot</button>`
+    + (up.length ? `<p class="sec-title">Upcoming</p><div class="pad stack" style="padding-top:0">${up.map(card).join('')}</div>`
+                 : `<div class="empty"><h3>No upcoming reservations</h3><p>Post an open spot to fill a seat at your next dinner.</p></div>`)
+    + (past.length ? `<p class="sec-title">Past</p><div class="pad stack" style="padding-top:0">${past.map(card).join('')}</div>` : '');
+}
+function vResv(id) {
+  const r = S.res[id], rest = R[r.rest], me = S.viewer, sp = r.spot && S.spots[r.spot];
+  const open = sp && sp.status === 'open';
+  const isOwner = r.owner === me;
+  let action;
+  if (r.time <= now()) action = `<p class="meta" style="text-align:center">This dinner has started.</p>`;
+  else if (isOwner && !open) action = `<button class="btn primary block" data-a="post" data-id="${r.id}">${ic('plus', 18)} Post an open spot</button>`;
+  else if (!isOwner) action = `<div class="locked">${ic('lock', 20)}<p class="meta">Only ${first(r.owner)} can post, edit or cancel open spots for this table.${open ? ` ${first(r.owner)} is filling ${seatsW(sp.left)} right now.` : ''}</p></div>`;
+  else action = '';
+  return nav('Reservation') + `<div class="pad stack">
+    <div class="placecard" style="--h:${rest.h}"><span class="pc-code">RES ${r.code}</span>${r.time > now() ? `<span class="pc-cd">${cd(r.time)}</span>` : ''}<h2>${esc(rest.n)}</h2><p>${when(r.time)} · ${rest.hood}</p></div>
+    <div class="card" style="padding:16px;display:flex;justify-content:center">${table(r.att, open ? sp.left : 0, 170)}</div>
+    <div class="card people">${r.att.map(p => `<div class="person">${av(p, 34)}<div class="grow"><strong>${esc(p === me ? `${P[p].n} (you)` : P[p].n)}</strong><small>${p === r.owner ? 'Booked the table' : 'Going'}</small></div></div>`).join('')}</div>
+    ${action}
+  </div>`;
+}
+
+/* ---------- 3. Post flow ---------- */
+const STEPS = ['Restaurant', 'Date & time', "Who's going", 'Seats open', 'Note', 'No-show fee'];
+function startPost(resId) {
+  const r = resId && S.res[resId];
+  S.draft = {resId: r ? r.id : null, rest: r ? r.rest : null, day: 1, hm:'19:30', att: r ? [...r.att] : [S.viewer],
+    seats: r ? clamp(r.party - r.att.length, 1, 4) : 1, note:'', fee:25, sel:null, lists:new Set()};
+  if (r) { S.draft.day = Math.round((startOfDay(r.time) - startOfDay(now())) / 864e5); S.draft.hm = new Date(r.time).toTimeString().slice(0, 5); }
+  S.stack = S.stack.filter(x => !['post','audience'].includes(x.s));
+  push({s:'post', step:1});
+}
+function draftTime() {
+  const d = S.draft;
+  if (d.resId) return S.res[d.resId].time;
+  const [h, m] = d.hm.split(':').map(Number);
+  const x = new Date(now()); x.setHours(0, 0, 0, 0); x.setDate(x.getDate() + d.day); x.setHours(h, m, 0, 0);
+  return x.getTime();
+}
+function vPost(step) {
+  const d = S.draft; if (!d) { return nav('Post') + `<div class="empty"><h3>Nothing to post</h3></div>`; }
+  let q, body, ok = true, note = '';
+  if (step === 1) {
+    q = 'Where are you eating?';
+    const mine = Object.values(S.res).filter(r => r.owner === S.viewer && r.time > now() && !(r.spot && S.spots[r.spot].status === 'open')).sort((a, b) => a.time - b.time);
+    body = (mine.length ? `<p class="label">From your reservations</p><div class="opts">${mine.map(r => `<button class="opt ${d.resId === r.id ? 'on' : ''}" data-a="pickRes" data-id="${r.id}" aria-pressed="${d.resId === r.id}">${tile(r.rest, 42)}<span class="grow"><strong>${esc(R[r.rest].n)}</strong><span class="meta">${when(r.time)} · party of ${r.party}</span></span></button>`).join('')}</div>` : '')
+      + `<p class="label">${mine.length ? 'Or pick a restaurant' : 'Pick a restaurant'}</p><div class="opts">${Object.entries(R).map(([k, x]) => `<button class="opt ${!d.resId && d.rest === k ? 'on' : ''}" data-a="pickRest" data-v="${k}" aria-pressed="${!d.resId && d.rest === k}">${tile(k, 42)}<span class="grow"><strong>${esc(x.n)}</strong><span class="meta">${x.c} · ${x.hood}</span></span></button>`).join('')}</div>`;
+    ok = !!d.rest;
+  } else if (step === 2) {
+    q = 'When is dinner?';
+    const t = draftTime(), left = t - now();
+    if (d.resId) {
+      body = `<div class="locked">${ic('lock', 20)}<div class="grow"><strong>${when(t)}</strong><p class="meta">Set by your reservation at ${esc(R[d.rest].n)}.</p></div></div>`;
+    } else {
+      const days = [...Array(7)].map((_, i) => { const x = new Date(now()); x.setHours(12, 0, 0, 0); x.setDate(x.getDate() + i); return x; });
+      body = `<p class="label">Date</p><div class="hscroll">${days.map((x, i) => `<button class="day ${d.day === i ? 'on' : ''}" data-a="pickDay" data-v="${i}" aria-pressed="${d.day === i}">${i === 0 ? 'Today' : x.toLocaleDateString('en-US', {weekday:'short'})}<b>${x.getDate()}</b></button>`).join('')}</div>`;
+      const slots = []; for (let h = 17; h <= 22; h++) for (const m of ['00', '30']) slots.push(`${String(h).padStart(2, '0')}:${m}`);
+      body += `<p class="label">Time</p><div class="times">${slots.map(s => {
+        const [h, m] = s.split(':').map(Number); const x = new Date(now()); x.setHours(0, 0, 0, 0); x.setDate(x.getDate() + d.day); x.setHours(h, m, 0, 0);
+        const past = x.getTime() <= now() + 30*MIN;
+        return `<button class="chip ${d.hm === s ? 'on' : ''}" data-a="pickTime" data-v="${s}" ${past ? 'disabled' : ''} aria-pressed="${d.hm === s}">${clock(x.getTime()).replace(':00', '')}</button>`;
+      }).join('')}</div>`;
+      ok = left > 30*MIN;
+    }
+    if (left > 0) body += `<p class="hint">${ic(left < 12*HOUR ? 'bolt' : 'clock', 16)}<span>Dinner is in ${dur(left)}. ${left < 12*HOUR ? 'That is under 12 hours, so everyone you pick will be notified at once.' : 'Close Friends and Recommended hear first. Friends of friends can be added later.'}</span></p>`;
+  } else if (step === 3) {
+    q = "Who's still going?";
+    const pool = [...new Set([S.viewer, ...d.att, ...fol(S.viewer)])];
+    body = `<div class="group">${pool.map(id => {
+      const me = id === S.viewer, on = d.att.includes(id);
+      return me ? `<div class="prow on">${av(id, 38)}<span class="prow-t"><strong>${esc(P[id].n)} (you)</strong><small>Organizer</small></span><span class="pill muted">${ic('lock', 12)} Host</span></div>`
+        : `<button class="prow ${on ? 'on' : ''}" data-a="toggleAtt" data-id="${id}" aria-pressed="${on}">${av(id, 38)}<span class="prow-t"><strong>${esc(P[id].n)}</strong><small>${(S.cf[S.viewer] || []).includes(id) ? 'Close Friend' : 'Following'}</small></span><span class="check">${ic('check', 14)}</span></button>`;
+    }).join('')}</div>`;
+    note = 'Leave out whoever dropped. These names show on the spot so people know the table.';
+  } else if (step === 4) {
+    q = 'How many seats are open?';
+    body = `<div class="stepper"><button class="step-btn" data-a="seats" data-v="-1" ${d.seats <= 1 ? 'disabled' : ''} aria-label="Fewer seats">−</button><span class="step-n" aria-live="polite">${d.seats}</span><button class="step-btn" data-a="seats" data-v="1" ${d.seats >= 4 ? 'disabled' : ''} aria-label="More seats">+</button></div>
+      <div class="card" style="padding:16px;display:flex;align-items:center;gap:16px">${table(d.att, d.seats, 150)}<div class="grow"><strong>Party of ${d.att.length + d.seats}</strong><p class="meta">${people(d.att.length)} going, ${seatsW(d.seats)} to fill. Each seat goes to whoever accepts first.</p></div></div>`;
+  } else if (step === 5) {
+    q = 'Add a note';
+    const sugg = ['Someone had to drop last minute.', 'Prix fixe, prepaid. Just show up.', 'Birthday dinner, come celebrate!', "We'll split the bill evenly."];
+    body = `<textarea class="ta" id="note" data-in="note" maxlength="160" placeholder="What should people know? The menu, the vibe, who dropped…">${esc(d.note)}</textarea>
+      <p class="label">Quick add</p><div class="chips">${sugg.map(s => `<button class="chip" data-a="addNote" data-v="${esc(s)}">${esc(s)}</button>`).join('')}</div>`;
+    note = 'Optional. Shown on the spot card and in the text.';
+  } else {
+    q = 'No-show fee';
+    body = `<div class="fee-big">${d.fee ? `$${d.fee}` : 'None'}</div><div class="chips" style="justify-content:center">${[0, 15, 25, 50].map(f => `<button class="chip ${d.fee === f ? 'on' : ''}" data-a="fee" data-v="${f}" aria-pressed="${d.fee === f}">${f ? `$${f}` : 'No fee'}</button>`).join('')}</div>`;
+    note = 'Only charged if someone accepts and then cancels. It never applies to people who just pass. No payments are taken in this prototype.';
+  }
+  return {html: nav(`<span class="step-count">${step} of 6</span>`, {left:`<button class="nb-btn" data-a="${step === 1 ? 'postCancel' : 'back'}">${step === 1 ? 'Cancel' : `${ic('back', 22)}<span>Back</span>`}</button>`, right: step > 1 ? `<button class="nb-btn" data-a="postCancel">Cancel</button>` : ''})
+    + `<div class="prog"><span style="width:${step / 6 * 100}%"></span></div>
+    <div class="pad"><p class="eyebrow" style="margin-top:14px">${STEPS[step - 1]}</p><h2 class="q">${q}</h2>${body}${note ? `<p class="hint">${note}</p>` : ''}</div>`
+    + foot(`<button class="btn primary block" data-a="postNext" ${ok ? '' : 'disabled'}>${step < 6 ? 'Continue' : 'Choose who gets it'}</button>`)};
+}
+
+/* ---------- 4. Audience ---------- */
+function vAudience(route) {
+  const edit = route.id ? S.spots[route.id] : null;
+  const org = S.viewer;
+  const att = edit ? resOf(edit).att : S.draft.att;
+  const time = edit ? resOf(edit).time : draftTime();
+  const left = time - now(), under = left < 12*HOUR;
+  const stage2Open = edit ? edit.stage2 : under;
+  const st = edit ? S.edit : S.draft;
+  const c = candidates(org, att);
+  if (!st.sel) st.sel = edit ? new Set() : new Set([...c.cf, ...c.recs.map(r => r.id), ...c.fof.map(f => f.id)]);
+  const existing = id => edit && edit.aud[id] && edit.aud[id].status !== 'removed' ? edit.aud[id] : null;
+  const statusWord = a => ({notified:'Sent', viewed:'Viewed', declined:'Declined', accepted:'Accepted', queued:'Queued', cancelled:'Canceled'}[a.status]);
+  const row = (id, sub, isFof) => {
+    const ex = existing(id);
+    if (ex) return `<div class="prow">${av(id, 38)}<span class="prow-t"><strong>${esc(P[id].n)}</strong><small>${esc(sub)}</small></span><span class="pill ${ex.status === 'declined' ? 'bad' : ex.status === 'queued' ? 'seat' : 'muted'}">${statusWord(ex)}</span></div>`;
+    const on = st.sel.has(id);
+    const later = isFof && !stage2Open;
+    return `<button class="prow ${on ? 'on' : ''}" data-a="toggleSel" data-id="${id}" aria-pressed="${on}">${av(id, 38)}<span class="prow-t"><strong>${esc(P[id].n)}</strong><small>${esc(sub)}${later && on ? ' · stage 2' : ''}</small></span><span class="check">${ic('check', 14)}</span></button>`;
+  };
+  const section = (key, title, ids, rows, extra = '') => {
+    if (!ids.length) return '';
+    const free = ids.filter(id => !existing(id));
+    const allOn = free.length && free.every(id => st.sel.has(id));
+    return `<div class="sec"><h3>${title}${extra}</h3>${free.length ? `<button class="link-btn" data-a="selAll" data-v="${key}">${allOn ? 'Clear' : 'Select all'}</button>` : ''}</div><div class="group">${rows}</div>`;
+  };
+  const banner = under
+    ? `<div class="urgent hot">${ic('bolt', 20)}<div><strong>Dinner is in ${cd(time)}.</strong> That's under 12 hours, so Close Friends, Recommended and friends of friends all get it at once.</div></div>`
+    : `<div class="urgent calm">${ic('clock', 20)}<div><strong>Dinner is in ${cd(time)}.</strong> Close Friends and Recommended hear first. ${stage2Open ? 'Friends of friends have already been added.' : "Friends of friends wait until it's been open 10 hours or dinner is under 12 hours away, then we'll ask you."}</div></div>`;
+  const listChips = c.lists.length
+    ? `<div class="sec"><h3>Lists</h3><button class="link-btn" data-a="newList">+ New list</button></div><div class="chips">${c.lists.map(l => `<button class="chip ${st.lists.has(l.id) ? 'on' : ''}" data-a="toggleList" data-id="${l.id}" aria-pressed="${st.lists.has(l.id)}" ${l.members.length ? '' : 'disabled'}>${esc(l.name)}<small>${l.members.length}</small></button>`).join('')}</div>`
+    : `<div class="sec"><h3>Lists</h3><button class="link-btn" data-a="newList">+ New list</button></div><p class="meta">Make lists like "Fencing friends" to send to a whole group at once.</p>`;
+  const html = (edit ? nav('Edit audience') : nav('Who gets it?'))
+    + `<div class="pad">${banner}
+      ${section('recs', 'Recommended', c.recs.map(r => r.id), c.recs.map(r => row(r.id, `Knows ${names(r.known)}${r.mutuals ? ` · ${r.mutuals} mutual${r.mutuals > 1 ? 's' : ''}` : ''}`)).join(''))}
+      ${section('cf', 'Close Friends', c.cf, c.cf.map(id => row(id, 'Close Friend · gets open spots first')).join(''))}
+      ${listChips}
+      ${section('ind', 'Individuals', c.ind, c.ind.map(id => row(id, (S.lists[org] || []).filter(l => l.members.includes(id)).map(l => l.name).join(', ') || 'Following')).join(''))}
+      ${section('fof', 'Friends of friends', c.fof.map(f => f.id), c.fof.map(f => row(f.id, viaLabel(f.via), true)).join(''), stage2Open ? '' : '<em>Stage 2</em>')}
+    </div>`;
+  const fresh = [...st.sel].filter(id => !existing(id) && !att.includes(id));
+  const isFof = id => sourceFor(org, att, id, [...st.lists]).src === 'fof';
+  const queued = stage2Open ? 0 : fresh.filter(isFof).length;
+  const nowN = fresh.length - queued;
+  const label = edit ? (fresh.length ? `Send to ${people(fresh.length)} more` : 'Pick people to add') : `Send to ${people(nowN)}`;
+  const noteText = `Each person gets a push and a text with a link${queued ? `. ${people(queued)} queued for stage 2` : ''}.`;
+  return {html: html + foot(`<button class="btn primary block" data-a="sendAud" ${(edit ? fresh.length : nowN) ? '' : 'disabled'}>${ic('send', 18)} ${label}</button>`, noteText)};
+}
+function sendNew() {
+  const d = S.draft, org = S.viewer, t = now();
+  let r;
+  if (d.resId) { r = S.res[d.resId]; r.att = [...d.att]; r.party = d.att.length + d.seats; }
+  else { const id = uid('r'); r = S.res[id] = {id, owner:org, rest:d.rest, time:draftTime(), party:d.att.length + d.seats, att:[...d.att], code:`${R[d.rest].code}-${1000 + S.seq * 37}`}; }
+  const under = r.time - t < 12*HOUR;
+  const sp = {id:uid('s'), resId:r.id, org, seats:d.seats, left:d.seats, fee:d.fee, note:d.note.trim(), created:t, status:'open',
+    stage2:under, prompted:under, dismissed:false, aud:{}, log:[], joined:[], fees:[]};
+  S.spots[sp.id] = sp; r.spot = sp.id;
+  const lists = [...d.lists];
+  let n = 0, q = 0;
+  for (const id of d.sel) {
+    if (r.att.includes(id) || id === org) continue;
+    sp.aud[id] = {...sourceFor(org, r.att, id, lists), status:'queued', stage:2};
+    if (sp.aud[id].src === 'fof' && !under) q++;
+    else { notify(sp, id, 1); n++; }
+  }
+  sp.log.push(under
+    ? {t, title:'Sent to everyone at once', detail:`Under 12h to dinner · ${people(n)} · push + text each`}
+    : {t, title:'Stage 1 · Close Friends + Recommended', detail:`${people(n)} · push + text each${q ? ` · ${q} friends of friends queued` : ''}`});
+  S.draft = null;
+  S.stack = [{s:'res'}, {s:'live', id:sp.id}];
+  render(true);
+  toast(`Sent to ${people(n)} · ${n} push${n === 1 ? '' : 'es'} + ${n} text${n === 1 ? '' : 's'}`);
+}
+function saveEdit() {
+  const sp = S.spots[S.edit.id], r = resOf(sp);
+  let n = 0, q = 0;
+  for (const id of S.edit.sel) {
+    const a = sp.aud[id];
+    if ((a && a.status !== 'removed') || r.att.includes(id)) continue;
+    sp.aud[id] = {...sourceFor(sp.org, r.att, id, [...S.edit.lists]), status:'queued', stage:2};
+    if (sp.aud[id].src === 'fof' && !sp.stage2) q++;
+    else { notify(sp, id, sp.stage2 ? 2 : 1); n++; }
+  }
+  if (n + q) sp.log.push({t:now(), title:'Audience updated', detail:`Added ${people(n + q)}${q ? ` (${q} queued for stage 2)` : ''}`});
+  S.edit = null; pop();
+  toast(n ? `Sent to ${people(n)} more` : `${people(q)} queued for stage 2`);
+}
+
+/* ---------- 5. Live status ---------- */
+function vLive(id) {
+  const sp = S.spots[id]; if (!sp) return nav('Live status') + gone();
+  const r = resOf(sp), rest = R[r.rest], me = S.viewer;
+  if (sp.org !== me) return nav('Live status') + `<div class="pad"><div class="locked">${ic('lock', 20)}<p class="meta">Only ${first(sp.org)} can see live status, edit the audience or cancel this spot.</p></div></div>`;
+  if (sp.status === 'filled') return vFilled(sp, true);
+  const c = tally(sp);
+  const ended = sp.status !== 'open';
+  const statusPill = {open:['seat', `${seatsW(sp.left)} open`], expired:['muted', 'Expired'], cancelled:['bad', 'Canceled']}[sp.status];
+  const queuedIds = Object.keys(sp.aud).filter(k => sp.aud[k].status === 'queued');
+  const fofFresh = fofOf(sp.org).filter(f => !r.att.includes(f.id) && !sp.aud[f.id]).map(f => f.id);
+  const expandIds = queuedIds.length ? queuedIds : fofFresh;
+  let prompt = '';
+  if (!ended && !sp.stage2 && sp.prompted && !sp.dismissed) {
+    prompt = `<div class="prompt" role="alert"><div class="row" style="align-items:flex-start">${ic('bolt', 22)}<div class="grow"><h3>Expand to friends of friends?</h3><p>${sp.promptWhy || 'Still open'} and ${seatsW(sp.left)} ${sp.left === 1 ? 'is' : 'are'} unfilled. Send it to ${people(expandIds.length)} your friends follow.</p></div></div>
+      <div class="row">${avs(expandIds, 26, 6)}<span class="meta grow">${esc(names(expandIds, 3))}</span></div>
+      <div class="foot-2"><button class="btn secondary sm" data-a="dismiss" data-id="${sp.id}">Not now</button><button class="btn primary sm" data-a="expand" data-id="${sp.id}" ${expandIds.length ? '' : 'disabled'}>Expand to ${expandIds.length}</button></div></div>`;
+  } else if (!ended && !sp.stage2 && sp.dismissed) {
+    prompt = `<button class="card row" style="padding:12px 14px;text-align:left" data-a="expand" data-id="${sp.id}">${ic('bolt', 18)}<span class="grow"><strong>Expand to friends of friends</strong><span class="meta" style="display:block">${people(expandIds.length)} waiting in stage 2</span></span>${ic('fwd', 18)}</button>`;
+  }
+  // Timeline: what happened, then what's still ahead.
+  const tl = [...sp.log].sort((a, b) => a.t - b.t).map(e => ({...e, done:true}));
+  if (!ended && !sp.stage2 && !sp.prompted) {
+    const due = Math.min(sp.created + 10*HOUR, r.time - 12*HOUR);
+    tl.push({t:due, title:'Stage 2 · Friends of friends', detail:`${people(queuedIds.length)} queued. If it's still open ${whenLower(due)}, we'll ask you to expand.`, done:false});
+  }
+  if (!ended) tl.push({t:r.time, title:'Expires at start time', detail:'Disappears from every feed and link', done:false});
+  const tlHtml = `<ol class="tl">${tl.map(e => `<li class="${e.done ? (e.kind || '') : 'pending'}"><span class="tdot"></span><div class="tl-t"><span>${esc(e.title)}</span><span class="tl-time">${shortWhen(e.t)}</span></div><div class="tl-d">${esc(e.detail)}</div></li>`).join('')}</ol>`;
+  // People, grouped by status.
+  const order = [['accepted','Accepted','good'],['viewed','Viewed','accent'],['notified','Notified','muted'],['declined','Declined','bad'],['queued','Queued · stage 2','seat'],['cancelled','Canceled','bad'],['removed','Removed · spot hidden for them','muted']];
+  const peopleHtml = order.map(([k, label, tone]) => {
+    const ids = Object.keys(sp.aud).filter(x => sp.aud[x].status === k);
+    if (!ids.length) return '';
+    return `<div class="sec"><h3>${label} · ${ids.length}</h3></div><div class="group">${ids.map(x => {
+      const a = sp.aud[x];
+      const act = ended ? '' : k === 'removed'
+        ? `<button class="link-btn" data-a="readd" data-id="${sp.id}" data-p="${x}">Re-add</button>`
+        : ['notified','viewed','declined','queued'].includes(k) ? `<button class="x-btn" data-a="removeP" data-id="${sp.id}" data-p="${x}" aria-label="Remove ${esc(P[x].n)} and hide this spot from them">${ic('x', 14)}</button>` : '';
+      return `<div class="prow">${av(x, 36)}<span class="prow-t"><strong>${esc(P[x].n)}</strong><small>${esc(srcTag(a))}${a.sentAt && k !== 'queued' ? ` · sent ${ago(a.sentAt)}` : ''}</small></span><span class="pill ${tone}">${label.split(' ·')[0]}</span>${act}</div>`;
+    }).join('')}</div>`;
+  }).join('');
+  const html = nav('Live status', {right:`<button class="nb-btn" data-a="sheet" data-v="preview" data-id="${sp.id}">Text</button>`})
+    + `<div class="pad stack">
+      <section class="card hero">
+        <div class="row">${tile(r.rest, 46)}<div class="grow"><h2>${esc(rest.n)}</h2><p class="meta">${when(r.time)} · party of ${r.party}</p></div><span class="pill ${statusPill[0]}">${statusPill[1]}</span></div>
+        <div class="meter">${table(r.att, ended ? 0 : sp.left, 142)}<div class="grow"><div class="big">${ended ? '–' : sp.left}</div><p style="font-weight:650">of ${seatsW(sp.seats)} open</p><p class="meta">${ended ? (sp.status === 'expired' ? 'Expired at start time' : 'Canceled. Removed everywhere.') : `Starts in ${cd(r.time)}`}</p>${sp.fee ? `<p class="meta">$${sp.fee} fee if an acceptor cancels</p>` : ''}</div></div>
+      </section>
+      ${prompt}
+      <div class="funnel"><div class="fstat"><b>${c.sent}</b><span>Notified</span></div><div class="fstat"><b>${c.viewed + c.declined + c.accepted}</b><span>Viewed</span></div><div class="fstat"><b>${c.declined}</b><span>Declined</span></div><div class="fstat"><b>${c.accepted}</b><span>Accepted</span></div></div>
+      <div><div class="sec" style="margin-top:6px"><h3>Timeline</h3></div><div class="card">${tlHtml}</div></div>
+      <div><div class="sec" style="margin-top:6px"><h3>Audience</h3>${ended ? '' : `<button class="link-btn" data-a="editAud" data-id="${sp.id}">+ Add people</button>`}</div>${peopleHtml.replace('<div class="sec">', '<div class="sec" style="margin-top:0">') || '<p class="meta">No one yet.</p>'}</div>
+      ${sp.fees.length ? `<div class="card fee"><span class="fee-amt">$${sp.fees.reduce((s, f) => s + f.amt, 0)}</span><div><strong>No-show fees</strong><p>${sp.fees.map(f => `${first(f.id)} canceled after accepting ($${f.amt})`).join('. ')}. Not actually charged in this prototype.</p></div></div>` : ''}
+      ${ended ? '' : `<button class="btn danger-ghost block" data-a="sheet" data-v="cancelSpot" data-id="${sp.id}">Cancel open spot</button>`}
+    </div>`;
+  return html;
+}
+
+/* ---------- 9. Filled ---------- */
+function vFilled(sp, isOrg) {
+  const r = resOf(sp), rest = R[r.rest];
+  const last = sp.joined[sp.joined.length - 1];
+  return nav(isOrg ? 'Live status' : 'Open spot') + `<div class="pad stack">
+    <div class="center-hero"><span class="badge-circle ${isOrg ? 'good' : 'muted'}">${ic(isOrg ? 'check' : 'chair', 34)}</span>
+      <h1>${isOrg ? "Table's full" : 'This spot was filled'}</h1>
+      <p>${isOrg ? `${last ? `${nm(last)} took the last seat ${ago(sp.filledAt)}.` : ''} The spot is off every feed and its link now shows it as filled.` : `Someone got there first. ${first(sp.org)}'s table at ${esc(rest.n)} is full, so it's off your feed.`}</p></div>
+    <div class="card" style="padding:18px;display:flex;justify-content:center">${table(r.att, 0, 180)}</div>
+    <div class="card people">${r.att.map(p => `<div class="person">${av(p, 34)}<div class="grow"><strong>${esc(p === S.viewer ? `${P[p].n} (you)` : P[p].n)}</strong><small>${p === r.owner ? 'Organizer' : sp.joined.includes(p) ? 'Joined via SeatSwap' : 'Going'}</small></div>${sp.joined.includes(p) ? '<span class="pill good">New</span>' : ''}</div>`).join('')}</div>
+    ${isOrg ? `<div class="card"><ol class="tl">${[...sp.log].sort((a, b) => a.t - b.t).map(e => `<li class="${e.kind || ''}"><span class="tdot"></span><div class="tl-t"><span>${esc(e.title)}</span><span class="tl-time">${shortWhen(e.t)}</span></div><div class="tl-d">${esc(e.detail)}</div></li>`).join('')}</ol></div>
+      <button class="btn primary block" data-a="go" data-r="group:${r.id}">${ic('msg', 18)} Message the group</button>` : `<button class="btn secondary block" data-a="tab" data-v="feed">Back to open spots</button>`}
+  </div>`;
+}
+const gone = (title = 'This spot isn’t available', text = 'It may have been canceled, or it wasn’t shared with you.') =>
+  `<div class="pad"><div class="center-hero"><span class="badge-circle muted">${ic('gone', 34)}</span><h1>${title}</h1><p>${text}</p></div><button class="btn secondary block" data-a="tab" data-v="feed" style="margin-top:14px">Back to open spots</button></div>`;
+
+/* ---------- 7. Spot detail ---------- */
+function vSpot(id) {
+  const sp = S.spots[id], me = S.viewer;
+  if (!sp) return nav('Open spot') + gone();
+  if (sp.org === me) return vLive(id);
+  const a = sp.aud[me], r = resOf(sp), rest = R[r.rest];
+  if (!a || a.status === 'removed' || a.status === 'queued' || sp.status === 'cancelled') return nav('Open spot') + gone();
+  if (a.status === 'accepted') return vAccepted(id);
+  if (a.status === 'declined') return nav('Open spot') + gone('You passed on this one', `It's hidden from your feed, and ${first(sp.org)} sees that you declined.`);
+  if (a.status === 'cancelled') return nav('Open spot') + gone('You gave up this seat', `It reopened to ${first(sp.org)}'s audience.`);
+  if (sp.status === 'expired') return nav('Open spot') + gone('This dinner has started', 'Open spots expire at the reservation time.');
+  if (sp.status === 'filled') return vFilled(sp, false);
+  const w = whyTag(sp, a);
+  const iKnow = r.att.filter(x => knows(me, x));
+  const html = nav('Open spot') + `<div class="pad stack">
+    <div class="placecard" style="--h:${rest.h}"><span class="pc-code">RES ${r.code}</span><span class="pc-cd">${cd(r.time)}</span><h2>${esc(rest.n)}</h2><p>${when(r.time)} · ${rest.c} · ${rest.hood}</p></div>
+    <span class="why">${ic(w.i, 14)}<span>${esc(w.t)}</span></span>
+    <div class="card" style="padding:16px;display:flex;align-items:center;gap:16px">${table(r.att, sp.left, 142)}<div class="grow"><div class="big" style="font-size:44px">${sp.left}</div><p style="font-weight:650">${sp.left === 1 ? 'seat left' : 'seats left'}</p><p class="meta">Party of ${r.party}. First to accept gets it.</p></div></div>
+    ${sp.note ? `<div class="card note">${av(sp.org, 32)}<div class="note-b"><small>${esc(first(sp.org))}</small>${esc(sp.note)}</div></div>` : ''}
+    <div><div class="sec" style="margin-top:4px"><h3>Who's going</h3><span class="meta">${iKnow.length ? `You know ${iKnow.length} of ${r.att.length}` : 'New faces'}</span></div>
+    <div class="card people">${r.att.map(p => {
+      const mut = fol(me).filter(y => y !== p && knows(y, p));
+      return `<div class="person">${av(p, 34)}<div class="grow"><strong>${esc(P[p].n)}</strong><small>${p === sp.org ? 'Organizer · ' : ''}${knows(me, p) ? 'You know each other' : mut.length ? `${mut.length} mutual${mut.length > 1 ? 's' : ''} · ${names(mut)}` : 'No mutuals yet'}</small></div>${knows(me, p) ? '<span class="pill accent">Friend</span>' : ''}</div>`;
+    }).join('')}</div></div>
+    <div class="card fee"><span class="fee-amt">${sp.fee ? `$${sp.fee}` : '$0'}</span><div><strong>${sp.fee ? 'No-show fee' : 'No fee'}</strong><p>${sp.fee ? `Only if you accept and then cancel. Passing now costs nothing.` : `${first(sp.org)} didn't set a fee. Still, please only accept if you can make it.`}</p></div></div>
+  </div>`;
+  return {html: html + foot(`<div class="foot-2"><button class="btn secondary" data-a="decline" data-id="${sp.id}">Not this time</button><button class="btn primary" data-a="accept" data-id="${sp.id}">Accept seat</button></div>`, `${seatsW(sp.left)} left · first accept wins`)};
+}
+
+/* ---------- 8. Accepted ---------- */
+function vAccepted(id) {
+  const sp = S.spots[id], me = S.viewer, r = resOf(sp), rest = R[r.rest];
+  if (!sp.aud[me] || sp.aud[me].status !== 'accepted') return vSpot(id);
+  const added = S.cal[`${me}:${r.id}`];
+  const d = new Date(r.time);
+  const upcoming = r.time > now();
+  return nav('You’re in', {left:`<button class="nb-btn" data-a="back">${ic('back', 22)}<span>Back</span></button>`}) + `<div class="pad stack">
+    <div class="center-hero"><span class="badge-circle good">${ic('check', 36)}</span><h1>You're in at ${esc(rest.n)}</h1><p>${when(r.time)} with ${esc(names(r.att.filter(x => x !== me), 3))}. ${first(sp.org)} got a heads-up.</p></div>
+    <div class="card" style="padding:16px;display:flex;justify-content:center">${table(r.att, sp.left, 170)}</div>
+    <div class="card"><dl class="kv"><dt>Reservation</dt><dd>${r.code}</dd><dt>Under</dt><dd>${esc(P[r.owner].n)}</dd><dt>Party</dt><dd>${r.party}</dd><dt>Starts in</dt><dd>${upcoming ? cd(r.time) : 'Started'}</dd></dl></div>
+    ${added ? `<div class="card cal-card"><span class="cal-date"><span>${d.toLocaleDateString('en-US', {month:'short'}).toUpperCase()}</span><b>${d.getDate()}</b></span><div class="grow"><strong>Dinner at ${esc(rest.n)}</strong><p class="meta">${clock(r.time)} · ${rest.hood}</p></div><span class="pill good">${ic('check', 12)} Added</span></div>`
+      : `<button class="btn secondary block" data-a="addCal" data-id="${r.id}">${ic('cal', 18)} Add to calendar</button>`}
+    <button class="btn primary block" data-a="go" data-r="group:${r.id}">${ic('msg', 18)} Message the group</button>
+    ${sp.fee ? `<div class="card fee"><span class="fee-amt">$${sp.fee}</span><div><strong>No-show fee</strong><p>Applies only if you cancel. If you do, the seat reopens to the same people ${first(sp.org)} sent it to.</p></div></div>` : ''}
+    ${upcoming ? `<button class="btn danger-ghost block" data-a="sheet" data-v="cancelSeat" data-id="${sp.id}">Cancel my seat</button>` : ''}
+  </div>`;
+}
+
+/* ---------- 6. Messages ---------- */
+function vMessages() {
+  const me = S.viewer, items = (S.texts[me] || []).slice().sort((a, b) => a.at - b.at);
+  let lastDay = null, out = '';
+  for (const m of items) {
+    const sp = S.spots[m.spot], r = resOf(sp), rest = R[r.rest];
+    const dk = dayLabel(m.at);
+    if (dk !== lastDay) { out += `<p class="im-ts"><b>${dk}</b> ${clock(m.at)}</p>`; lastDay = dk; }
+    const live = visibleTo(sp, me) || (sp.aud[me] && sp.aud[me].status === 'accepted');
+    out += `<div class="bub in">${esc(m.body)} <span class="lnk">seatswap.app/s/${sp.id}</span></div>
+      <button class="lp ${live ? '' : 'gone'}" data-a="go" data-r="spot:${sp.id}" aria-label="Open spot at ${esc(rest.n)}"><div class="lp-img" style="--h:${rest.h}">${esc(rest.n)}</div><div class="lp-t"><strong>${live ? `Open seat · ${when(r.time)}` : 'No longer available'}</strong><small>seatswap.app</small></div></button>`;
+  }
+  const html = `<div class="im-head"><button class="nb-btn" data-a="back" aria-label="Back">${ic('back', 24)}</button><div class="im-who"><span class="im-ava">${ic('chair', 22)}</span>SeatSwap ›</div><span></span></div>
+    <div class="thread">${out || '<p class="im-ts">No texts yet. When someone sends you an open spot, the link shows up here.</p>'}
+    ${items.length ? '<p class="im-note">Links open the spot in SeatSwap. This number doesn’t take replies.</p>' : ''}</div>`;
+  return {html, outside:`<div class="im-comp"><input class="im-in" id="im-disabled" disabled placeholder="Text Message"><button class="im-send" disabled aria-label="Send">${ic('send', 16)}</button></div>`};
+}
+function vGroup(resId) {
+  const r = S.res[resId], rest = R[r.rest], me = S.viewer;
+  const msgs = S.groups[resId] || [];
+  if (S.compose[resId] === undefined) S.compose[resId] = r.owner === me ? `Table's full for ${dayLabel(r.time).toLowerCase()} at ${clock(r.time)}. See you all there!` : `Hi all! I grabbed the open seat. See you at ${clock(r.time)}!`;
+  const out = msgs.map(m => m.from === 'sys' ? `<p class="im-ts">${esc(m.text)}</p>`
+    : m.from === me ? `<div class="bub out">${esc(m.text)}</div>`
+    : `<p class="bub-from">${esc(first(m.from))}</p><div class="bub in">${esc(m.text)}</div>`).join('');
+  const html = `<div class="im-head"><button class="nb-btn" data-a="back" aria-label="Back">${ic('back', 24)}</button><div class="im-who">${avs(r.att.filter(x => x !== me), 30, 4)}${esc(rest.n)} · ${r.att.length} people ›</div><span></span></div>
+    <div class="thread"><p class="im-ts"><b>${dayLabel(r.time)}</b> dinner at ${clock(r.time)}</p>${out}</div>`;
+  return {html, outside:`<div class="im-comp"><input class="im-in" id="compose-${resId}" data-in="compose" data-id="${resId}" value="${esc(S.compose[resId])}" aria-label="Message"><button class="im-send" data-a="sendGroup" data-id="${resId}" aria-label="Send">${ic('send', 16)}</button></div>`};
+}
+
+/* ---------- 10. Friends ---------- */
+function vFriends(route) {
+  const me = S.viewer, tab = route.tab || 'following';
+  const lists = S.lists[me] || [];
+  const cf = S.cf[me] || [];
+  const fofs = fofOf(me);
+  const tabs = [['following', 'Following', fol(me).length], ['cf', 'Close Friends', cf.length], ...lists.map(l => [l.id, l.name, l.members.length]), ['fof', 'Friends of friends', fofs.length]];
+  const seg = `<div class="seg" role="tablist">${tabs.map(([k, l, n]) => `<button role="tab" class="${tab === k ? 'on' : ''}" aria-selected="${tab === k}" data-a="ftab" data-v="${k}">${esc(l)}<small>${n}</small></button>`).join('')}<button data-a="newList">+ New list</button></div>`;
+  const starRow = (id, sub) => `<div class="prow">${av(id, 40)}<span class="prow-t"><strong>${esc(P[id].n)}</strong><small>${esc(sub)}</small></span><button class="star-btn ${cf.includes(id) ? 'on' : ''}" data-a="toggleCF" data-id="${id}" aria-pressed="${cf.includes(id)}" aria-label="${cf.includes(id) ? 'Remove from' : 'Add to'} Close Friends">${ic('star', 20)}</button></div>`;
+  let body;
+  if (tab === 'following') {
+    body = fol(me).length ? `<p class="meta" style="margin:0 2px 10px">Tap the star to make someone a Close Friend. Close Friends get your open spots first.</p><div class="group">${fol(me).map(id => starRow(id, [(cf.includes(id) ? 'Close Friend' : ''), ...lists.filter(l => l.members.includes(id)).map(l => l.name)].filter(Boolean).join(' · ') || 'Following')).join('')}</div>` : `<div class="empty"><h3>Not following anyone yet</h3></div>`;
+  } else if (tab === 'cf') {
+    body = `<div class="urgent calm">${ic('star', 18)}<div>Close Friends get your open spots in the first wave, before anyone else.</div></div>` + (cf.length ? `<div class="group" style="margin-top:12px">${cf.map(id => starRow(id, 'Close Friend')).join('')}</div>` : `<div class="empty"><h3>No Close Friends yet</h3><p>Star people on the Following tab.</p></div>`);
+  } else if (tab === 'fof') {
+    body = `<p class="meta" style="margin:0 2px 10px">People your friends follow. They can get your open spots in stage 2, tagged with who connects you.</p><div class="group">${fofs.map(f => `<div class="prow">${av(f.id, 40)}<span class="prow-t"><strong>${esc(P[f.id].n)}</strong><small>${esc(viaLabel(f.via))}</small></span><button class="follow-btn" data-a="follow" data-id="${f.id}">Follow</button></div>`).join('')}</div>`;
+  } else {
+    const l = lists.find(x => x.id === tab);
+    body = l ? `<div class="row" style="justify-content:space-between;margin:0 2px 10px"><p class="meta">${people(l.members.length)} · pick this list when you send an open spot.</p><button class="link-btn" data-a="editList" data-id="${l.id}">Edit list</button></div>
+      ${l.members.length ? `<div class="group">${l.members.map(id => starRow(id, cf.includes(id) ? 'Close Friend' : 'Following')).join('')}</div>` : `<div class="empty"><h3>This list is empty</h3><p>Edit the list to add people.</p></div>`}` : '';
+  }
+  return lgHeader('Friends', 'Who can see your open spots, and in what order.') + seg + `<div class="pad" style="padding-top:2px">${body}</div>`;
+}
+function vListEdit() {
+  const d = S.listDraft, me = S.viewer;
+  const pool = [...new Set([...fol(me), ...d.members])];
+  return {html: nav(d.id ? 'Edit list' : 'New list', {left:`<button class="nb-btn" data-a="back">Cancel</button>`, right: d.id ? `<button class="nb-btn" data-a="deleteList" style="color:var(--bad)">Delete</button>` : ''})
+    + `<div class="pad"><p class="label" style="margin-top:12px"><label for="listName">List name</label></p><input class="inp" id="listName" data-in="listName" maxlength="32" placeholder="e.g. Fencing friends" value="${esc(d.name)}">
+      <div class="sec"><h3>Members · <span id="memberCount">${d.members.size}</span></h3></div>
+      <div class="group">${pool.map(id => `<button class="prow ${d.members.has(id) ? 'on' : ''}" data-a="toggleMember" data-id="${id}" aria-pressed="${d.members.has(id)}">${av(id, 38)}<span class="prow-t"><strong>${esc(P[id].n)}</strong><small>Following</small></span><span class="check">${ic('check', 14)}</span></button>`).join('')}</div></div>`
+    + foot(`<button class="btn primary block" data-a="saveList">${d.id ? 'Save list' : 'Create list'}</button>`)};
+}
+
+/* ---------- Sheets ---------- */
+function renderSheet() {
+  const L = document.getElementById('layer');
+  const sh = S.sheet; if (!sh) { L.innerHTML = ''; return; }
+  let inner = '';
+  if (sh.type === 'viewer') {
+    inner = `<h2>View SeatSwap as…</h2><p>Each person only sees open spots that were sent to them. Switch to see the same spot from both sides.</p>
+      <div class="group">${Object.keys(P).map(id => {
+        const feed = Object.values(S.spots).filter(sp => visibleTo(sp, id)).length;
+        const org = Object.values(S.spots).filter(sp => sp.org === id && sp.status === 'open').length;
+        const pend = (S.pending[id] || []).length;
+        return `<button class="prow ${S.viewer === id ? 'on' : ''}" data-a="viewAs" data-id="${id}">${av(id, 36)}<span class="prow-t"><strong>${esc(P[id].n)}${id === 'alex' ? ' · main demo' : ''}</strong><small>${feed} in feed${org ? ` · organizing ${org}` : ''}${pend ? ` · ${pend} new alert${pend > 1 ? 's' : ''}` : ''}</small></span><span class="check">${ic('check', 14)}</span></button>`;
+      }).join('')}</div>`;
+  } else if (sh.type === 'cancelSpot') {
+    const sp = S.spots[sh.id];
+    inner = `<h2>Cancel this open spot?</h2><p>It disappears from every feed and every text link right away. ${sp.joined.length ? `${names(sp.joined)} keep${sp.joined.length === 1 ? 's' : ''} their seat.` : 'Your reservation stays as it is.'}</p>
+      <button class="btn danger block" data-a="cancelSpot" data-id="${sp.id}">Cancel open spot</button><button class="btn secondary block" data-a="closeSheet">Keep it open</button>`;
+  } else if (sh.type === 'cancelSeat') {
+    const sp = S.spots[sh.id];
+    inner = `<h2>Cancel your seat at ${esc(restOf(sp).n)}?</h2><p>${sp.fee ? `<strong style="color:var(--bad)">The $${sp.fee} no-show fee applies</strong> because you accepted and are now canceling. ` : ''}The seat reopens to the same people ${first(sp.org)} sent it to, and ${first(sp.org)} gets a heads-up.</p>
+      <button class="btn danger block" data-a="cancelSeat" data-id="${sp.id}">Cancel my seat${sp.fee ? ` · $${sp.fee}` : ''}</button><button class="btn secondary block" data-a="closeSheet">Keep my seat</button>`;
+  } else if (sh.type === 'preview') {
+    const sp = S.spots[sh.id], r = resOf(sp), rest = R[r.rest];
+    inner = `<h2>What people receive</h2><p>Each person gets a push notification and this text. The link opens the spot, and only works for people you sent it to.</p>
+      <div class="thread" style="padding:4px 0"><div class="bub in">${esc(textBody(sp, 'new'))} <span class="lnk">seatswap.app/s/${sp.id}</span></div>
+      <div class="lp"><div class="lp-img" style="--h:${rest.h}">${esc(rest.n)}</div><div class="lp-t"><strong>Open seat · ${when(r.time)}</strong><small>seatswap.app</small></div></div></div>
+      <button class="btn secondary block" data-a="closeSheet">Done</button>`;
+  } else if (sh.type === 'demo') {
+    inner = demoHTML();
+  }
+  L.innerHTML = `<div class="scrim" data-a="scrim"><div class="sheet" role="dialog" aria-modal="true"><span class="grab"></span>${inner}</div></div>`;
+}
+
+/* ---------- Banner + toast ---------- */
+let bannerTimer, toastTimer;
+function showBanner(b) {
+  S.banner = b; renderBanner();
+  clearTimeout(bannerTimer); bannerTimer = setTimeout(() => { S.banner = null; renderBanner(); }, 5200);
+}
+function renderBanner() {
+  const b = S.banner;
+  document.getElementById('banner').innerHTML = b ? `<div class="banner-wrap"><button class="banner" data-a="bannerTap">${logo(20)}<span class="banner-app"><span>SEATSWAP</span><span>now</span></span><strong>${esc(b.title)}</strong><span class="b">${esc(b.body)}</span></button></div>` : '';
+}
+function toast(t) {
+  document.getElementById('toast').innerHTML = `<div class="toast" role="status">${esc(t)}</div>`;
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => { document.getElementById('toast').innerHTML = ''; }, 2800);
+}
+
+/* ---------- Demo controls ---------- */
+function simTarget() {
+  const r = cur();
+  if (r.id && S.spots[r.id] && S.spots[r.id].status === 'open') return S.spots[r.id];
+  const open = Object.values(S.spots).filter(sp => sp.status === 'open');
+  return open.find(sp => sp.org === S.viewer) || open.find(sp => sp.org === 'alex') || open[0] || null;
+}
+function demoHTML() {
+  const t = simTarget(), me = S.viewer;
+  const feedN = Object.values(S.spots).filter(sp => visibleTo(sp, me)).length;
+  const full = new Date(now()).toLocaleString('en-US', {weekday:'short', hour:'numeric', minute:'2-digit', second:'2-digit'});
+  return `<div class="demo-in">
+    <div><p class="eyebrow">Prototype controls</p><h2>Demo</h2><p class="demo-lede">No login, no payments. Everything resets on reload.</p></div>
+    <div class="demo-block"><p class="eyebrow">Viewing as</p><div class="who">${Object.keys(P).map(id => `<button class="${me === id ? 'on' : ''}" data-a="viewAs" data-id="${id}" aria-label="View as ${esc(P[id].n)}" title="${esc(P[id].n)}">${av(id, 32)}</button>`).join('')}</div>
+      <p class="demo-note"><b>${esc(P[me].n)}</b> sees ${feedN} open spot${feedN === 1 ? '' : 's'}. A spot only shows for people it was sent to.</p></div>
+    <div class="demo-block"><p class="eyebrow">Clock</p><div class="demo-clock" data-clockfull>${full}</div>
+      <div class="demo-row"><button class="dbtn primary" data-a="ff" data-v="10">${ic('ff', 14)} Fast-forward 10h</button><button class="dbtn" data-a="ff" data-v="1">+1h</button></div>
+      <p class="demo-note">Unfilled spots ask to expand to friends of friends after 10h, or once dinner is under 12h away. Spots expire at start time.</p></div>
+    <div class="demo-block"><p class="eyebrow">Simulate guests</p>
+      <p class="demo-note">${t ? `On <b>${esc(restOf(t).n)}</b> (${esc(first(t.org))}'s spot)` : 'No open spots'}</p>
+      <div class="demo-row"><button class="dbtn" data-a="sim" data-v="view" ${t ? '' : 'disabled'}>${ic('eye', 14)} View</button><button class="dbtn" data-a="sim" data-v="decline" ${t ? '' : 'disabled'}>${ic('x', 14)} Decline</button><button class="dbtn" data-a="sim" data-v="accept" ${t ? '' : 'disabled'}>${ic('check', 14)} Accept</button></div></div>
+    <div class="demo-block"><p class="eyebrow">Try this</p><ol class="demo-steps">
+      <li>In <b>Reservations</b>, open Osteria Nove to see Alex's live spot.</li>
+      <li><b>Fast-forward 10h</b>. It's unfilled, so Alex is asked to expand to friends of friends.</li>
+      <li>View as <b>Kai</b>, accept from the feed, then switch back to Alex to see it filled.</li>
+      <li>As Alex, accept Maya's Bistro Laurent seat, then cancel it to reopen the seat.</li>
+    </ol></div>
+    <button class="dbtn" data-a="reset">Reset demo</button>
+  </div>`;
+}
+function renderDemo() { document.getElementById('demo').innerHTML = demoHTML(); }
+
+/* ---------- Actions ---------- */
+const A = {
+  tab: d => { S.sheet = null; goRoot(d.v); },
+  back: () => pop(),
+  go: d => { S.sheet = null; push(parseRoute(d.r)); },
+  sheet: d => { S.sheet = {type:d.v, id:d.id}; renderSheet(); },
+  closeSheet: () => { S.sheet = null; renderSheet(); },
+  scrim: (d, el, e) => { if (e.target === el) { S.sheet = null; renderSheet(); } },
+  viewAs: d => {
+    S.viewer = d.id; S.sheet = null; S.stack = [{s:'feed'}]; S.draft = null; S.edit = null;
+    S.banner = null; renderBanner(); clearTimeout(bannerTimer);
+    render(true);
+    const p = S.pending[d.id]; S.pending[d.id] = [];
+    if (p && p.length) showBanner(p.length > 1 ? {...p[p.length - 1], body:`${p[p.length - 1].body} (+${p.length - 1} more)`} : p[0]);
+    else toast(`Viewing as ${P[d.id].n}`);
+  },
+  bannerTap: () => { const b = S.banner; S.banner = null; renderBanner(); if (b && b.go) { S.sheet = null; push(parseRoute(b.go)); } },
+  accept: d => {
+    const sp = S.spots[d.id];
+    if (acceptAs(S.viewer, d.id)) { S.stack = S.stack.filter(x => x.s !== 'spot'); push({s:'accepted', id:d.id}); toast(sp.status === 'filled' ? 'Seat is yours. That filled the table.' : 'Seat is yours'); }
+    else { push({s:'spot', id:d.id}); }
+  },
+  decline: d => { declineAs(S.viewer, d.id); S.stack = [{s:'feed'}]; render(true); toast(`Hidden from your feed. ${first(S.spots[d.id].org)} will see you passed.`); },
+  addCal: d => { S.cal[`${S.viewer}:${d.id}`] = true; render(); toast('Added to Calendar'); },
+  sendGroup: d => {
+    const txt = (S.compose[d.id] || '').trim(); if (!txt) return;
+    (S.groups[d.id] ||= []).push({from:S.viewer, text:txt, at:now()}); S.compose[d.id] = '';
+    render(true);
+    const r = S.res[d.id], replier = r.att.find(x => x !== S.viewer);
+    if (replier) setTimeout(() => { S.groups[d.id].push({from:replier, text: r.owner === S.viewer ? 'Can’t wait!' : `Welcome! Table's under ${first(r.owner)}.`, at:now()}); if (cur().s === 'group') render(true); }, 1400);
+  },
+  cancelSeat: d => { cancelSeat(S.viewer, d.id); S.sheet = null; S.stack = [{s:'res'}]; render(true); toast('Seat canceled. It reopened to the same audience.'); },
+  cancelSpot: d => { const sp = S.spots[d.id]; sp.status = 'cancelled'; sp.log.push({t:now(), title:'Canceled by organizer', detail:'Removed from every feed and link', kind:'bad'}); S.sheet = null; S.stack = [{s:'res'}]; render(true); toast('Open spot canceled. It’s gone everywhere.'); },
+  expand: d => { const n = expandSpot(d.id); render(); toast(`Sent to ${people(n)} · friends of friends`); },
+  dismiss: d => { S.spots[d.id].dismissed = true; render(); },
+  removeP: d => { const sp = S.spots[d.id]; sp.aud[d.p].status = 'removed'; sp.log.push({t:now(), title:`Removed ${first(d.p)}`, detail:'The spot is hidden for them only', kind:'muted'}); render(); toast(`${first(d.p)} can no longer see this spot`); },
+  readd: d => { const sp = S.spots[d.id], a = sp.aud[d.p]; a.status = 'queued'; if (a.src === 'fof' && !sp.stage2) { toast(`${first(d.p)} is queued for stage 2`); } else { notify(sp, d.p, sp.stage2 ? 2 : 1); toast(`Sent to ${first(d.p)} again`); } render(); },
+  editAud: d => { S.edit = {id:d.id, sel:null, lists:new Set()}; push({s:'audience', id:d.id}); },
+  post: d => startPost(d.id),
+  postCancel: () => { S.draft = null; S.stack = S.stack.filter(x => !['post','audience'].includes(x.s)); if (!S.stack.length) S.stack = [{s:'res'}]; render(false, true); },
+  postNext: () => {
+    const step = cur().step;
+    if (step === 3 && !S.draft.resId) S.draft.seats = clamp(S.draft.seats, 1, 4);
+    if (step < 6) push({s:'post', step:step + 1});
+    else { S.draft.sel = null; S.draft.lists = new Set(); push({s:'audience'}); }
+  },
+  pickRes: d => { const r = S.res[d.id]; Object.assign(S.draft, {resId:r.id, rest:r.rest, att:[...r.att], seats:clamp(r.party - r.att.length, 1, 4), day:Math.round((startOfDay(r.time) - startOfDay(now())) / 864e5), hm:new Date(r.time).toTimeString().slice(0, 5)}); render(); },
+  pickRest: d => { if (S.draft.resId) { S.draft.att = [S.viewer]; S.draft.seats = 1; } S.draft.resId = null; S.draft.rest = d.v; render(); },
+  pickDay: d => { S.draft.day = +d.v; render(); },
+  pickTime: d => { S.draft.hm = d.v; render(); },
+  toggleAtt: d => { const a = S.draft.att; S.draft.att = a.includes(d.id) ? a.filter(x => x !== d.id) : [...a, d.id]; render(); },
+  seats: d => { S.draft.seats = clamp(S.draft.seats + +d.v, 1, 4); render(); },
+  addNote: d => { const n = S.draft.note.trim(); S.draft.note = (n ? `${n} ${d.v}` : d.v).slice(0, 160); render(); },
+  fee: d => { S.draft.fee = +d.v; render(); },
+  toggleSel: d => { const st = cur().id ? S.edit : S.draft; st.sel.has(d.id) ? st.sel.delete(d.id) : st.sel.add(d.id); render(); },
+  selAll: d => {
+    const edit = cur().id ? S.spots[cur().id] : null, st = edit ? S.edit : S.draft;
+    const c = candidates(S.viewer, edit ? resOf(edit).att : st.att);
+    const ids = {cf:c.cf, recs:c.recs.map(r => r.id), ind:c.ind, fof:c.fof.map(f => f.id)}[d.v]
+      .filter(id => !(edit && edit.aud[id] && edit.aud[id].status !== 'removed'));
+    const allOn = ids.every(id => st.sel.has(id));
+    ids.forEach(id => allOn ? st.sel.delete(id) : st.sel.add(id)); render();
+  },
+  toggleList: d => {
+    const edit = cur().id ? S.spots[cur().id] : null, st = edit ? S.edit : S.draft;
+    const att = edit ? resOf(edit).att : st.att;
+    const lists = S.lists[S.viewer] || [];
+    const l = lists.find(x => x.id === d.id), members = l.members.filter(x => !att.includes(x) && x !== S.viewer);
+    if (st.lists.has(d.id)) {
+      st.lists.delete(d.id);
+      const still = new Set(lists.filter(x => st.lists.has(x.id)).flatMap(x => x.members));
+      members.forEach(m => { if (!still.has(m) && !(S.cf[S.viewer] || []).includes(m)) st.sel.delete(m); });
+    } else { st.lists.add(d.id); members.forEach(m => st.sel.add(m)); }
+    render();
+  },
+  sendAud: () => cur().id ? saveEdit() : sendNew(),
+  ftab: d => { cur().tab = d.v; render(); },
+  toggleCF: d => { const c = S.cf[S.viewer] ||= []; const i = c.indexOf(d.id); i >= 0 ? c.splice(i, 1) : c.push(d.id); render(); toast(i >= 0 ? `${first(d.id)} removed from Close Friends` : `${first(d.id)} is now a Close Friend`); },
+  follow: d => { (S.following[S.viewer] ||= []).push(d.id); render(); toast(`Following ${first(d.id)}`); },
+  newList: () => { S.listDraft = {id:null, name:'', members:new Set()}; push({s:'list'}); },
+  editList: d => { const l = S.lists[S.viewer].find(x => x.id === d.id); S.listDraft = {id:l.id, name:l.name, members:new Set(l.members)}; push({s:'list'}); },
+  toggleMember: d => { const m = S.listDraft.members; m.has(d.id) ? m.delete(d.id) : m.add(d.id); render(); },
+  saveList: () => {
+    const d = S.listDraft, name = d.name.trim();
+    if (!name) { toast('Give the list a name first'); document.getElementById('listName').focus(); return; }
+    const lists = S.lists[S.viewer] ||= [];
+    let id = d.id;
+    if (id) Object.assign(lists.find(x => x.id === id), {name, members:[...d.members]});
+    else { id = uid('l'); lists.push({id, name, members:[...d.members]}); }
+    S.listDraft = null; S.stack.pop();
+    const prev = cur(); if (prev.s === 'friends') prev.tab = id;
+    render(); toast(d.id ? 'List saved' : `Created “${name}”`);
+  },
+  deleteList: () => { const id = S.listDraft.id; S.lists[S.viewer] = S.lists[S.viewer].filter(x => x.id !== id); S.listDraft = null; S.stack.pop(); if (cur().s === 'friends') cur().tab = 'following'; render(); toast('List deleted'); },
+  ff: d => {
+    S.offset += +d.v * HOUR;
+    checkTime(); render();
+    toast(`Jumped ${d.v}h ahead · now ${dayLabel(now())} ${clock(now())}`);
+  },
+  sim: d => {
+    const sp = simTarget(); if (!sp) return;
+    const pool = Object.keys(sp.aud).filter(k => (d.v === 'view' ? ['notified'] : ['notified','viewed']).includes(sp.aud[k].status) && k !== S.viewer);
+    if (!pool.length) { toast(d.v === 'view' ? 'Everyone notified has already looked' : 'No one left who can respond'); return; }
+    const pid = pool[Math.floor(Math.random() * pool.length)];
+    if (d.v === 'view') { markViewed(pid, sp.id); toast(`${first(pid)} viewed ${restOf(sp).n}`); }
+    if (d.v === 'decline') { declineAs(pid, sp.id); toast(`${first(pid)} tapped “Not this time”`); }
+    if (d.v === 'accept') { acceptAs(pid, sp.id); if (sp.org !== S.viewer) toast(`${first(pid)} accepted a seat at ${restOf(sp).n}`); }
+    render();
+  },
+  reset: () => { seed(); render(true); toast('Demo reset'); },
+};
+document.addEventListener('click', e => {
+  const el = e.target.closest('[data-a]'); if (!el || el.disabled) return;
+  const fn = A[el.dataset.a]; if (!fn) return;
+  if (el.dataset.a !== 'scrim') e.stopPropagation();
+  fn(el.dataset, el, e);
+});
+document.addEventListener('input', e => {
+  const k = e.target.dataset && e.target.dataset.in; if (!k) return;
+  if (k === 'note') S.draft.note = e.target.value;
+  if (k === 'listName') S.listDraft.name = e.target.value;
+  if (k === 'compose') S.compose[e.target.dataset.id] = e.target.value;
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && e.target.dataset && e.target.dataset.in === 'compose') A.sendGroup({id:e.target.dataset.id});
+  if (e.key === 'Escape' && S.sheet) { S.sheet = null; renderSheet(); }
+});
+
+/* ---------- Tick ---------- */
+setInterval(() => {
+  const t = now();
+  document.querySelectorAll('[data-cd]').forEach(el => { el.textContent = dur(+el.dataset.cd - t); });
+  document.querySelectorAll('[data-clock]').forEach(el => { el.textContent = clock(t).replace(/ [AP]M/, ''); });
+  document.querySelectorAll('[data-clockfull]').forEach(el => { el.textContent = new Date(t).toLocaleString('en-US', {weekday:'short', hour:'numeric', minute:'2-digit', second:'2-digit'}); });
+  if (checkTime()) render();
+}, 1000);
+
+seed();
+render(true);
+</script>
+</body>
+</html>
